@@ -4,7 +4,7 @@ Notebooks para la descarga y visualización con las librerías TweetScraperR
 
 ## Introducción
 
-La librería **tweetscraperR** es una alternativa para la descarga de datos de Twitter tras el cierra de las APIs de Twitter con acceso gratuito. La librería utiliza técnicas de scraping lo que implica, por un lado, restricciones en algunos tipos de mensajes y por otro una mayor necesidad de recursos de computación con descargas más lentas. No obstante, a pesar de estas dificultades es el único medio actualmente para descargar tweets de forma gratuita.
+La librería [**TweetScraperR**](https://github.com/agusnieto77/TweetScraperR) es una alternativa para la descarga de datos de Twitter tras el cierra de las APIs de Twitter con acceso gratuito. La librería utiliza técnicas de scraping lo que implica, por un lado, restricciones en algunos tipos de mensajes y por otro una mayor necesidad de recursos de computación con descargas más lentas. No obstante, a pesar de estas dificultades es el único medio actualmente para descargar tweets de forma gratuita.
 
 Con las técnicas de scraping podemos descargar todo lo que podemos acceder por la interfaz Web de Twiter/X. Las limitaciones más importantes afectan al análisis de red, ya que los RTs no aparecerán en una búsqueda y la descarga de seguidores /seguidos está limitada a un número.
 
