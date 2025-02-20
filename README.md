@@ -1,6 +1,6 @@
 # TweetScraperR_notebook
 
-Notebooks para la descarga y visualización con las librerías TweetScraperR
+Notebooks para la descarga y visualización con la librería [**TweetScraperR**](https://github.com/agusnieto77/TweetScraperR)
 
 ## Introducción
 
