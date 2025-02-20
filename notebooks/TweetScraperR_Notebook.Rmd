@@ -110,7 +110,7 @@ for (i in 1:(length(date_sequence) - 1))  {
   tweets <- getTweetsHistoricalSearch (
     search = query,
     timeout = 10,
-    n_tweets = 10,
+    n_tweets = 5000,
     since = ini_date,
     until = end_date,
     xuser = Sys.getenv(USER),
