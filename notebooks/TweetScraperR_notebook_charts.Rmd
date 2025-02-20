@@ -1,0 +1,330 @@
+---
+title: "charts"
+output:
+  html_document:
+    df_print: paged
+params:
+    data_path: "../data"                # Path raiz de los datos
+    dataset_name: "xxxxx"               # Nombre del dataset
+    prefix: "xxxxx"                     # Prefijo para ficheros de gráficas
+    base_title: "xxxxx"                 # Título base de las gráficas
+    time_zone: "Europe/Berlin"          # Huso horario
+    #time_zone: "America/Chicago"       # Huso horario
+    min_reach: 10000                    # Aparecerá el autor si el alcance es mayor que esa cantidad
+    min_RTs: 100                        # Aparecerá el autor si el alcancenúmero de RTs es mayor que esa cantidad
+    filter: FALSE                       # (TRUE/FALSE) TRUE si se desea hacer filtro 
+    filter_file: "xxxxxxxx.csv"         # (Solo si filter es TRUE) nombre del fichero para filtrar 
+    false_pos: FALSE                    # (TRUE/FALSE) TRUE si hay falsos positivos
+    false_pos_file: "xxxxxxx.csv"       # (Solo si false_pos es TRUE) nombre del fichero para falsos +
+    show_topics: FALSE                  # (TRUE/FALSE) TRUE si se desea mostrar los topics
+    topics_file: "xxxxxxx.csv"          # (Solo si show_topics es TRUE)
+    show_events: TRUE                   # (TRUE/FALSE) TRUE si se desea hacer anotaciones
+    events_file: "xxxxxxxx.csv"         # FALSE si no hay anotaciones, si las hay, nombre del fichero
+    zoom: FALSE                         # (TRUE/FALSE) TRUE si se desea hacer zoom 
+    min_date_zoom: "YYYY-MM-DD HH:MM:SS"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
+    max_date_zoom: "2024-12-21 16:22:04"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
+---
+
+```{r setup, 	echo = FALSE,message = FALSE,	warning = FALSE,include=FALSE, cache = FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+require("knitr")
+## setting working directory
+opts_knit$set(root.dir = "./")
+
+```
+
+## Importamos las librerías
+
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+if(!"tidyverse" %in% installed.packages()) {install.packages("tidyverse")}
+if(!"lubridate" %in% installed.packages()) {install.packages("lubridate")}
+if(!"ggrepel" %in% installed.packages()) {install.packages("ggrepel")}
+if(!"scales" %in% installed.packages()) {install.packages("scales")}
+if(!"tidytext" %in% installed.packages()) {install.packages("tidytext")}
+if(!"tm" %in% installed.packages()) {install.packages("tm")}
+if(!"ggwordcloud" %in% installed.packages()) {install.packages("ggwordcloud")}
+if(!"RColorBrewer" %in% installed.packages()) {install.packages("RColorBrewer")}
+if(!"ggh4x" %in% installed.packages()) {install.packages("ggh4x")}
+if (!"ggtext" %in% installed.packages()) {install.packages("ggtext")}
+if (!"treemapify" %in% installed.packages()) {install.packages("treemapify")}
+if(!"emojifont" %in% installed.packages()) {install.packages("emojifont")}
+if(!"showtext" %in% installed.packages()) {install.packages("showtext")}
+library(tidyverse)       # Suite para datos y gráficos
+library(lubridate)       # Tratamiento de fechas
+library(ggrepel)         # Ubicación no solapada de textos
+library(scales)          # Escalas
+library(tidytext)        # Para manejos de textos
+library(tm)              # Para manejos de textos
+library(ggwordcloud)     # Para crear una nube de palabras
+library(RColorBrewer)    # Paleta de colores
+library(ggh4x)           # Color en las facetas
+library(ggtext)          # Dar color a los textos de las leyendas o titulos
+library(treemapify)      # visualización treemap
+library(showtext)       # fonts emoji
+locale(date_names = "en", date_format = "%AD", time_format = "%AT",
+  decimal_mark = ".", grouping_mark = ",", tz = "Europe/Berlin",
+  encoding = "UTF-8", asciify = FALSE)
+Sys.setlocale(category = "LC_ALL", locale = "english")
+```
+
+## Importamos funciones
+
+```{r funtions, include=FALSE}
+source("utils/charts.R")               # Funciones generales de visualización
+source("utils/utils_charts.R")         # Funciones generales
+
+```
+
+## Entorno por defecto
+
+```{r environment}
+## Entorno por defecto. No tocar salvo que se quiera usar otro entorno
+data_path <- file.path(params$data_path, params$dataset_name) # Directorio de datos
+image_path <- file.path(data_path, paste0(params$prefix,"_graficas")) # Directorio de gráficas
+tweets_meta_file <- file.path(data_path, paste0(params$prefix,"_meta.csv")) # datos y metadatos
+tweets_filtered_file <- file.path(data_path, paste0(params$prefix,"_filtered.csv")) # datos filtrados
+tweets_filtered_meta_file <- file.path(data_path, paste0(params$prefix,"_meta_filtered.csv")) # datos y metadatos filtrados
+filter_file <- file.path(data_path,params$filter_file) # filtro
+false_pos_file <- file.path(data_path, params$false_pos_file) # falsos positivos
+topics_file <- file.path(data_path, params$topics_file) # fichero de topics
+events_file <- file.path(data_path, params$events_file) # fichero de eventos
+if(!file.exists(image_path)) {
+ dir.create(image_path)
+}
+
+```
+
+## Lectura de ficheros y filtrado
+
+```{r read_files}
+
+# Lectura de tweets con metadatos
+tweets_meta <- read_csv(
+  tweets_meta_file,
+  show_col_types = FALSE
+)
+#quitamos repetidos
+ tweets_meta <- tweets_meta %>%
+   group_by(url) %>% slice(1) %>%
+   ungroup()
+ 
+ 
+# Filtrar
+if (params$filter) {
+  filter <- paste(unlist(read_csv(filter_file )),collapse = "|")
+  tweets_meta <- tweets_meta %>%
+    filter(grepl(filter,tolower(texto))) 
+}
+if (params$false_pos) {
+  false_pos <- paste(unlist(read_csv(false_pos_file )),collapse = "|")
+  tweets_meta <- tweets_meta %>%
+    filter(!grepl(false_pos,tolower(texto))) 
+}
+write_csv (
+  tweets_meta ,
+  tweets_filtered_meta_file
+)
+
+if (params$show_topics){
+  topics <- read_csv(
+    topics_file,
+    show_col_types = FALSE
+  ) 
+}
+if (params$show_events){
+  events <- read_csv(
+    events_file,
+    show_col_types = FALSE
+  ) 
+}
+
+```
+
+## Adaptar la zona horaria y redondear por slot time
+
+```{r set_time, include=FALSE}
+
+# calculamos el slot time
+max_date <- max(tweets_meta$fecha_slot, na.rm=TRUE)
+min_date <- min(tweets_meta$fecha_slot, na.rm=TRUE)
+num_days <- as.numeric(difftime(max_date ,min_date , units = c("days")))
+slot_time <- ifelse(num_days <= 15, "hour", "day")
+
+# Redondear por slot time
+tweets_meta <- tweets_meta %>%
+  mutate(fecha = as.POSIXct(floor_date(lubridate::with_tz(fecha, params$time_zone),"sec"))) %>%
+  filter (!is.na(fecha)) %>%
+  mutate(fecha_slot = as.POSIXct(floor_date(fecha,slot_time)))
+max_date <- max(tweets_meta$fecha_slot, na.rm=TRUE)
+min_date <- min(tweets_meta$fecha_slot, na.rm=TRUE)
+
+```
+
+## Colores
+
+```{r color}
+
+color_tweets = "#4682b4"
+color_reach = "#6e322d"
+color_RT ="#6e322d"
+COLOR_TEXTO =  "#5a5856" 
+```
+
+## Gráficas
+
+### Tweets vs. alcance with influencers
+
+```{r tweets_alcance-influencers, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+
+
+p <- draw_tweets_vs_reach_influencers (tweets_meta, "total",  min_date, max_date, params$min_reach, 25, events) 
+print (p)
+# Salvar la gráfica en un archiv
+ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach_influencers.png")))
+
+```
+
+### Tweets vs. alcance with influencers zoom
+
+```{r tweets_alcance-influencers-zoom, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+if (params$zoom){
+  p <- draw_tweets_vs_reach_influencers (
+    tweets_meta, "zoom", 
+    as.POSIXct(params$min_date_zoom),
+    as.POSIXct(params$max_date_zoom),
+    params$min_reach, 35, events)
+  print (p)
+   # Salvar la gráfica en un archiv
+  ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach_influencers_zoom.png")))
+}
+
+```
+
+### Tweets vs. alcance
+
+```{r tweets-alcance, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+p <- draw_tweets_vs_reach(tweets_meta, "total",  min_date, max_date, events ) 
+print (p)
+# Salvar la gráfica en un archiv
+ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach.png")))
+
+
+```
+
+### Tweets vs. RTs
+
+```{r tweets-RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+
+p <- draw_tweets_vs_RTs(tweets_meta, "total",  min_date, max_date, params$min_RTs,25 ) 
+print (p)
+# Salvar la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_RTs.png")))
+
+```
+
+### Palabras más frecuentes
+
+```{r frecuency_word, message=FALSE, warning=FALSE}
+
+p<- draw_word_frequency (tweets_meta, "total",  min_date, max_date, FALSE) 
+print (p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud.png")))
+
+```
+
+### Palabras más frecuentes con amplificación
+
+```{r frecuency_word_RT, message=FALSE, warning=FALSE}
+
+p <- draw_word_frequency (tweets_meta, "total",  min_date, max_date, TRUE) 
+print(p)
+
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud_RTs.png")))
+```
+
+### Usuarios más mencionados
+
+```{r frecuency_mention, message=FALSE, warning=FALSE}
+mentions_frequency<- tweets_meta %>%
+    mutate(mention = str_extract(texto, "@\\w+"))  # Extraer usuarios
+
+p <- draw_col_frequency(mentions_frequency, "mention", "total",   min_date, max_date, "mentions")
+print(p)
+
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_users_mention_cloud.png")))
+
+```
+
+### Usuarios citados
+
+```{r frecuency_cited, message=FALSE, warning=FALSE}
+
+p <- draw_col_frequency(tweets_meta, "user_citado", "total",   min_date, max_date, "Cited users")
+print(p)
+
+
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_users_cited_cloud.png")))
+
+```
+
+### Emoticonos
+
+```{r frecuency_emoji, message=FALSE, warning=FALSE}
+p <- draw_emoji_frequency(tweets_meta,"total",  min_date, max_date)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_emoticones_cloud.png")))
+```
+
+### Accumulated sites
+
+With amplification
+
+```{r Accumulated-sites, fig.height=6, fig.width=10}
+p <- draw_site_acumulate(tweets_meta, "total",  min_date, max_date)
+print(p)
+  # Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_sites.png")))
+
+```
+
+### Accumulated topics
+
+```{r topics, fig.height=6, fig.width=10, message=FALSE}
+if (params$show_topics){
+  p <- draw_topics_acumulate(tweets_meta, topics, "total", min_date, max_date, FALSE)
+  print(p)
+  # Salvamos la gráfica en un archivo
+  ggsave(file.path(image_path,paste0(params$prefix,"_topics.png")))
+}
+
+```
+
+### Accumulated topics con amplificación
+
+```{r topics_RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+if (params$show_topics){
+  p <- draw_topics_acumulate(tweets_meta, topics, "total",  min_date, max_date, TRUE)
+  print(p)
+  # Salvamos la gráfica en un archivo
+  ggsave(file.path(image_path,paste0(params$prefix,"_topics_RTs.png")))
+}
+
+```
+
+### Accumulated emojis con amplificación
+
+```{r emojis, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+p <- draw_emojis_acumulate(tweets_meta, "total",  min_date, max_date, TRUE)
+print(p)
+  # Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,paste0(params$prefix,"_emojis_RTs.png")))
+```

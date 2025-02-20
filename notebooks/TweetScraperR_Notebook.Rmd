@@ -1,0 +1,252 @@
+---
+title: "twitter scraping"
+output:
+  html_document:
+    df_print: paged
+---
+
+## TweetScraperR_notebook.Rmd
+
+En este cuaderno se han adaptado las librerías **TweetScraperR** a la forma de trabajar con t_hoarder_R.
+
+1.  **Formato RDS vs. csv**: El formato por defecto de la descarga es RDS, muy útil porque conserva una estructura de datos jerárquica, pero implica usar R para su tratamiento posterior. El formato csv es plano y podemos perder información jerárquica, por ejemplo, la lista de hashtags, la lista de enlaces o la lista de emojis. Sin embargo, este formato es muy fácil de tratar con distintas herramientas. El cuaderno usa el formato **csv**
+2.  **Estructura de almacenamiento**: el cuaderno distingue entre dataset que es el directorio donde se almacenan los datos y los ficheros donde se guardan que tendrán un prefijo. En un dataset puede haber ficheros con distintos prefijos, todo depende de cómo se organice el trabajo. Para cada prefijo existen dos ficheros: uno con los datos básicos de los tweets y otro con los metadatos. Estos ficheros se pueden ampliar con capturas posteriores.
+3.  **Granularidad de la descarga**: Cuando hacemos búsquedas, el número de mensajes obtenido es inferior a 1000. Por tanto, si la frecuencia de tweets es muy alta hay que descargar por periodos de tiempo más pequeños, ajustándolos para que no sobrepase el límite de tweets de ese intervalo de tiempo. En cada intervalo se guarda la información en el fichero, de forma que si se interrumpe, se podría reanudar en el siguiente.
+4.  **Parada y arranque de la descarga**: puede ocurrir cuando la descarga tiene un intervalo de tiempo grande, que se nos colapsen los recursos del ordenador o que tengamos algún fallo. Con este procedimiento podríamos reanudar la descarga en el punto que la dejó.
+
+### Tipos de descargas
+
+1.  **Get Tweets Historical Search**: descarga una consulta en un periodo definido con una frecuencia establecida
+2.  **Get Tweets Historical Timeline**: descarga el timeline de una lista de usuarios en un periodo definido con una frecuencia establecida. No se obtienen los RTs porque equivale a una consulta del tipo from:usuario
+3.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
+
+### Cómo usar el cuaderno
+
+1.  Cuando se abre el cuaderno, ejecutar los chunks: **Init notebook**, **Import libraries**, **Import functions**, **Open session**
+2.  Elegir el tipo de descarga, rellenar los parámetros y ejecutar el chunk. Se pueden ejecutar distintos tipos de descargas sin necesidad de ejecutar el Open session
+3.  Antes de salir ejecutar close session
+
+### Código
+
+### Init notebook
+
+```{r setup, 	echo = FALSE,message = FALSE,	warning = FALSE,include=FALSE, cache = FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+require("knitr")
+## setting working directory
+opts_knit$set(root.dir = "./")
+```
+
+### Import libraries
+
+```{r library}
+if(!"tidyverse" %in% installed.packages()) {install.packages("tidyverse")}
+if(!"devtools" %in% installed.packages()) {install.packages("devtools")}
+if(!"TweetScraperR" %in% installed.packages()) {devtools::install_github("agusnieto77/TweetScraperR")}
+library("tidyverse")
+library("TweetScraperR")
+```
+
+### Import functions
+
+```{r funtions, include=FALSE}
+source("utils/format_meta_tweets.R")   # Funciones generales de visualización
+
+```
+
+### Open session
+
+```{r start-sesion}
+data_path = "../data"
+if(!file.exists(data_path)) {
+ dir.create(img_path)
+}
+assign("USER", "xxxxxx",  envir = .GlobalEnv)
+assign("PASS", "xxxxxx",  envir = .GlobalEnv)
+openTwitter()
+```
+
+### close session
+
+```{r close-session}
+closeTwitter
+
+```
+
+### Get Tweets Historical Search
+
+```{r Get-Tweets-Historical-Search}
+data_path = "../data"
+dataset <- "trump"
+prefix <- "trump"
+query <- "trump"
+since <- "2025-02-12 00:00:01"
+until <- "2025-02-18 00:00:01"
+frecuency <- "8 hours"
+
+output <- file.path(data_path,dataset)
+output_file <- file.path(output,paste0(prefix,".csv"))
+output_meta_file <- file.path(output,paste0(prefix,"_meta.csv"))
+
+if(!file.exists(output)) {
+ dir.create(output)
+}
+flag_append <- FALSE
+flag_head <- TRUE
+if(file.exists(output_meta_file)) {
+ flag_append <- TRUE
+ flag_head <- FALSE
+}
+
+date_sequence <- seq(as.POSIXct(since), as.POSIXct(until), by=frecuency)
+for (i in 1:(length(date_sequence) - 1))  {
+  ini_date = paste0(gsub(" ", "_", date_sequence[[i]]),"_UTC")
+  end_date = paste0(gsub(" ", "_", date_sequence[[i+1]]),"_UTC")
+  print(paste(ini_date, end_date))
+  tweets <- getTweetsHistoricalSearch (
+    search = query,
+    timeout = 10,
+    n_tweets = 10,
+    since = ini_date,
+    until = end_date,
+    xuser = Sys.getenv(USER),
+    xpass = Sys.getenv(PASS),
+    dir = NULL,
+    save = FALSE  
+  ) 
+  if (!is.null(tweets)){
+    meta_tweets <- extractTweetsData(tweets)
+    tweets <- tweets %>%
+    select(- art_html) %>%
+    mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+    write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
+    meta_tweets <- format_meta_tweets(meta_tweets) 
+    write_csv (meta_tweets, output_meta_file, append = flag_append, col_names = flag_head)
+    flag_append <- TRUE
+    flag_head <- FALSE
+    #system("taskkill /F /IM chrome.exe", intern = TRUE, ignore.stderr = TRUE)  # para windows
+    #system("pkill chrome")                                                    # para unix
+    #system("pkill -x 'Google Chrome'")                                        # para mac
+    #Sys.sleep(60)
+  }
+}
+
+```
+
+### Get Tweets Historical Timeline
+
+La query que realiza es from:user since:xxx-xx-xx until:xxxx-xx-xx
+
+OJO!!! no descarga RTs realizados por el usuario, solo tweets propios
+
+```{r Get-Tweets-Historical-Timeline}
+data_path = "../data"
+dataset <- "congosto"
+prefix <- "congosto"
+since <- "2025-01-25 00:00:01"
+until <- "2025-02-18 00:00:01"
+frecuency <- "1 day"
+
+output <- file.path(data_path,dataset)
+output_file <- file.path(output,paste0(prefix,".csv"))
+output_meta_file <- file.path(output,paste0(prefix,"_meta.csv"))
+
+if(!file.exists(output)) {
+ dir.create(output)
+}
+
+flag_append <- FALSE
+flag_head <- TRUE
+if(file.exists(output_meta_file)) {
+ flag_append <- TRUE
+ flag_head <- FALSE
+}
+
+date_sequence <- seq(as.POSIXct(since), as.POSIXct(until), by=frecuency)
+list_users = c(
+"congosto",
+"t_hoarder"
+)
+for (user in list_users){
+  print(paste("--> download user", user))
+  for (i in 1:(length(date_sequence) - 1))  {
+    star_date = paste0(gsub(" ", "_", date_sequence[[i]]),"_UTC")
+    end_date = paste0(gsub(" ", "_", date_sequence[[i+1]]),"_UTC")
+    print(paste(star_date, end_date))
+    tweets <- getTweetsHistoricalTimeline (
+      username = user,
+      timeout = 10,
+      n_tweets = 5000,
+      since = star_date,
+      until = end_date,
+      xuser = Sys.getenv(USER),
+      xpass = Sys.getenv(PASS),
+      dir = NULL,
+      save = FALSE  
+    ) 
+    if (!is.null(tweets)){
+      meta_tweets <- extractTweetsData(tweets)
+      tweets <- tweets %>%
+      select(- art_html) %>%
+      mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+      write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
+      meta_tweets <- format_meta_tweets(meta_tweets) 
+      write_csv (meta_tweets, output_meta_file, append = flag_append, col_names = flag_head)
+      flag_append <- TRUE
+      flag_head <- FALSE
+    }
+  }
+}
+
+```
+
+### Get Tweets images
+
+```{r Get-Tweets-images}
+data_path = "../data"
+dataset = "trump"
+prefix = "trump"
+file_in <- file.path(data_path,dataset,paste0(prefix,"_meta.csv"))
+output <- file.path(data_path,dataset,paste0(prefix,"_images"))
+context <- file.path(data_path,dataset,paste0(prefix,"_context_images"))
+output_context <- file.path(context,"context_images.csv")
+if(!file.exists(output)) {
+ dir.create(output)
+ print (paste("created directory",output))
+}
+# obtenemos el contexto
+if(!file.exists(context)) {
+ dir.create(context)
+ print (paste("created directory",context))
+ writeLines("downloaded", output_context)
+ list_downloaded <- list()
+}else{
+  list_downloaded <- read_csv(output_context)
+  list_downloaded <- list_downloaded$downloaded
+}
+
+tweets <- read_csv(file_in) %>%
+  filter (!is.na(links_img_post))
+# group 100 by 100
+list_images <- unique(tweets$links_img_post)
+group <- get_grupos(list_images, 100)
+for (i in seq_along(group)) {
+  print (paste("group ",i))
+  group_images <- as.list(group[[i]])
+  group_images <- setdiff(group_images, list_downloaded)
+  if (length(group_images) > 0){
+    print( paste("Descargando", length(group_images)))
+    getTweetsImages(
+      urls = group_images,
+      directorio = output)
+    # save context
+    for (image in list_images) {
+      cat(image, file = output_context, sep = "\n", append = TRUE)
+    }
+  }
+}
+```
