@@ -265,20 +265,6 @@ print(p)
 ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud_RTs.png")))
 ```
 
-#### Palabras más frecuentes con amplificación
-
-```{r frecuency_mention, message=FALSE, warning=FALSE}
-mentions_frequency<- tweets_meta %>%
-    mutate(mention = str_extract(texto, "@\\w+"))  # Extraer usuarios
-
-p <- draw_col_frequency(mentions_frequency, "mention", "total",   min_date, max_date, "mentions")
-print(p)
-
-# Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_users_mention_cloud.png")))
-
-```
-
 #### Usuarios citados
 
 ```{r frecuency_cited, message=FALSE, warning=FALSE}
