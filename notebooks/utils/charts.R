@@ -330,7 +330,6 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
     group_by (fecha_slot,influencer) %>%
     slice(1) %>%
     ungroup()
-  print(tweets_vs_influencer_df)
   # Calculamos las dos escalas
   max_tweets <- max(tweets_vs_rt_df$num_tweets,na.rm = TRUE)
   max_RT <- max(tweets_vs_rt_df$num_RTs,na.rm = TRUE)
