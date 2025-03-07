@@ -154,12 +154,12 @@ output_meta_order_file <- file.path(output,paste0(prefix,"_meta_order.csv"))
 tweets <- read_csv(output_file, show_col_types = FALSE) %>%
   group_by(url)  %>%
   slice (1) %>%
-  arrange(user,fecha)
+  arrange(fecha)
 write_csv (tweets, output_order_file)
 tweets_meta <- read_csv(output_meta_file, show_col_types = FALSE) %>%
   group_by(url)  %>%
   slice (1) %>%
-  arrange(username,fecha)
+  arrange(fecha)
 write_csv (tweets_meta, output_meta_order_file)
 
 ```
