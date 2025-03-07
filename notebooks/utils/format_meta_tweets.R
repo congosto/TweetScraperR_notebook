@@ -7,8 +7,8 @@
 # divide una lista en grupos
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-get_grupos <- function(lista, tamaño_grupo) {
-  split(lista, ceiling(seq_along(lista)/tamaño_grupo))
+get_grupos <- function(lista, size_grupo) {
+  split(lista, ceiling(seq_along(lista)/size_grupo))
 }
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #
