@@ -18,11 +18,11 @@ params:
     false_pos_file: "xxxxxxx.csv"       # (Solo si false_pos es TRUE) nombre del fichero para falsos +
     show_topics: FALSE                  # (TRUE/FALSE) TRUE si se desea mostrar los topics
     topics_file: "xxxxxxx.csv"          # (Solo si show_topics es TRUE)
-    show_events: TRUE                   # (TRUE/FALSE) TRUE si se desea hacer anotaciones
+    show_events: FALSE                   # (TRUE/FALSE) TRUE si se desea hacer anotaciones
     events_file: "xxxxxxxx.csv"         # FALSE si no hay anotaciones, si las hay, nombre del fichero
     zoom: FALSE                         # (TRUE/FALSE) TRUE si se desea hacer zoom 
     min_date_zoom: "YYYY-MM-DD HH:MM:SS"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
-    max_date_zoom: "2024-12-21 16:22:04"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
+    max_date_zoom: "YYYY-MM-DD HH:MM:SS"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
 ---
 
 ## TweetScraperR_notebook_charts.Rmd
@@ -65,11 +65,7 @@ if(!"tidytext" %in% installed.packages()) {install.packages("tidytext")}
 if(!"tm" %in% installed.packages()) {install.packages("tm")}
 if(!"ggwordcloud" %in% installed.packages()) {install.packages("ggwordcloud")}
 if(!"RColorBrewer" %in% installed.packages()) {install.packages("RColorBrewer")}
-if(!"ggh4x" %in% installed.packages()) {install.packages("ggh4x")}
 if (!"ggtext" %in% installed.packages()) {install.packages("ggtext")}
-if (!"treemapify" %in% installed.packages()) {install.packages("treemapify")}
-if(!"emojifont" %in% installed.packages()) {install.packages("emojifont")}
-if(!"showtext" %in% installed.packages()) {install.packages("showtext")}
 library(tidyverse)       # Suite para datos y gráficos
 library(lubridate)       # Tratamiento de fechas
 library(ggrepel)         # Ubicación no solapada de textos
@@ -78,10 +74,7 @@ library(tidytext)        # Para manejos de textos
 library(tm)              # Para manejos de textos
 library(ggwordcloud)     # Para crear una nube de palabras
 library(RColorBrewer)    # Paleta de colores
-library(ggh4x)           # Color en las facetas
 library(ggtext)          # Dar color a los textos de las leyendas o titulos
-library(treemapify)      # visualización treemap
-library(showtext)       # fonts emoji
 locale(date_names = "en", date_format = "%AD", time_format = "%AT",
   decimal_mark = ".", grouping_mark = ",", tz = "Europe/Berlin",
   encoding = "UTF-8", asciify = FALSE)
@@ -156,8 +149,9 @@ if (params$show_events){
   events <- read_csv(
     events_file,
     show_col_types = FALSE
-  ) 
-}
+  )
+}else {events= NULL}
+
 
 ```
 
@@ -166,8 +160,8 @@ if (params$show_events){
 ```{r set_time, include=FALSE}
 
 # calculamos el slot time
-max_date <- max(tweets_meta$fecha_slot, na.rm=TRUE)
-min_date <- min(tweets_meta$fecha_slot, na.rm=TRUE)
+max_date <- max(tweets_meta$fecha, na.rm=TRUE)
+min_date <- min(tweets_meta$fecha, na.rm=TRUE)
 num_days <- as.numeric(difftime(max_date ,min_date , units = c("days")))
 slot_time <- ifelse(num_days <= 15, "hour", "day")
 
@@ -198,7 +192,11 @@ COLOR_TEXTO =  "#5a5856"
 ```{r tweets_alcance-influencers, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 
 
-p <- draw_tweets_vs_reach_influencers (tweets_meta, "total",  min_date, max_date, params$min_reach, 25, events) 
+p <- draw_tweets_vs_reach_influencers (
+  tweets_meta, "total",
+  min_date, max_date,
+  params$min_reach, 25,
+  events) 
 print (p)
 # Salvar la gráfica en un archiv
 ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach_influencers.png")))
@@ -224,9 +222,12 @@ if (params$zoom){
 #### Tweets vs. alcance
 
 ```{r tweets-alcance, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
-p <- draw_tweets_vs_reach(tweets_meta, "total",  min_date, max_date, events ) 
+p <- draw_tweets_vs_reach(
+  tweets_meta, "total",
+  min_date, max_date,
+  events) 
 print (p)
-# Salvar la gráfica en un archiv
+# Salvar la gráfica en un archivo
 ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach.png")))
 
 
@@ -236,7 +237,10 @@ ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach.png")))
 
 ```{r tweets-RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 
-p <- draw_tweets_vs_RTs(tweets_meta, "total",  min_date, max_date, params$min_RTs,25 ) 
+p <- draw_tweets_vs_RTs(
+  tweets_meta, "total",
+  min_date, max_date,
+  params$min_RTs,25) 
 print (p)
 # Salvar la gráfica en un archivo
 ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_RTs.png")))
@@ -247,7 +251,10 @@ ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_RTs.png")))
 
 ```{r frecuency_word, message=FALSE, warning=FALSE}
 
-p<- draw_word_frequency (tweets_meta, "total",  min_date, max_date, FALSE) 
+p<- draw_word_frequency (
+  tweets_meta, "total",
+  min_date, max_date,
+  FALSE) 
 print (p)
 # Salvamos la gráfica en un archivo
 ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud.png")))
@@ -258,7 +265,10 @@ ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud.png")))
 
 ```{r frecuency_word_RT, message=FALSE, warning=FALSE}
 
-p <- draw_word_frequency (tweets_meta, "total",  min_date, max_date, TRUE) 
+p <- draw_word_frequency (
+  tweets_meta, "total",
+  min_date, max_date,
+  TRUE) 
 print(p)
 
 # Salvamos la gráfica en un archivo
@@ -269,7 +279,11 @@ ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud_RTs.png")))
 
 ```{r frecuency_cited, message=FALSE, warning=FALSE}
 
-p <- draw_col_frequency(tweets_meta, "user_citado", "total",   min_date, max_date, "Cited users")
+p <- draw_col_frequency(
+  tweets_meta,
+  "user_citado", "total",
+  min_date, max_date,
+  "Cited users")
 print(p)
 
 
@@ -280,9 +294,11 @@ ggsave(file.path(image_path,paste0(params$prefix,"_users_cited_cloud.png")))
 
 #### Emoticonos
 
-```{r frecuency_emoji, message=FALSE, warning=FALSE}
-p <- draw_emoji_frequency(tweets_meta,"total",  min_date, max_date)
-print(p)
+```{r frecuency_emoji, fig.height=4, fig.width=3, message=FALSE, warning=FALSE}
+p <- draw_emoji_frequency(
+  tweets_meta,"total",
+  min_date, max_date)
+# print(p) no se puede mostrar la gráfica por problemas con los emojis, pero se guarda bien en disco
 # Salvamos la gráfica en un archivo
 ggsave(file.path(image_path,paste0(params$prefix,"_emoticones_cloud.png")))
 ```
@@ -290,7 +306,9 @@ ggsave(file.path(image_path,paste0(params$prefix,"_emoticones_cloud.png")))
 #### Acumulado de las menciones a los sitios Web con amplificación
 
 ```{r Accumulated-sites, fig.height=6, fig.width=10}
-p <- draw_site_acumulate(tweets_meta, "total",  min_date, max_date)
+p <- draw_site_acumulate(
+  tweets_meta, "total",
+  min_date, max_date)
 print(p)
   # Salvamos la gráfica en un archivo
 ggsave(file.path(image_path,paste0(params$prefix,"_sites.png")))
@@ -301,7 +319,11 @@ ggsave(file.path(image_path,paste0(params$prefix,"_sites.png")))
 
 ```{r topics, fig.height=6, fig.width=10, message=FALSE}
 if (params$show_topics){
-  p <- draw_topics_acumulate(tweets_meta, topics, "total", min_date, max_date, FALSE)
+  p <- draw_topics_acumulate(
+    tweets_meta,
+    topics, "total",
+    min_date, max_date,
+    FALSE)
   print(p)
   # Salvamos la gráfica en un archivo
   ggsave(file.path(image_path,paste0(params$prefix,"_topics.png")))
@@ -313,7 +335,11 @@ if (params$show_topics){
 
 ```{r topics_RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 if (params$show_topics){
-  p <- draw_topics_acumulate(tweets_meta, topics, "total",  min_date, max_date, TRUE)
+  p <- draw_topics_acumulate(
+    tweets_meta,
+    topics,"total",
+    min_date, max_date,
+    TRUE)
   print(p)
   # Salvamos la gráfica en un archivo
   ggsave(file.path(image_path,paste0(params$prefix,"_topics_RTs.png")))
@@ -324,7 +350,10 @@ if (params$show_topics){
 #### Acumulado de la aparición de emojis con amplificación
 
 ```{r emojis, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
-p <- draw_emojis_acumulate(tweets_meta, "total",  min_date, max_date, TRUE)
+p <- draw_emojis_acumulate(
+  tweets_meta, "total",
+  min_date, max_date,
+  TRUE)
 print(p)
   # Salvamos la gráfica en un archivo
 ggsave(file.path(image_path,paste0(params$prefix,"_emojis_RTs.png")))
