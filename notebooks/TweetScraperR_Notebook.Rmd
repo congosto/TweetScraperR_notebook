@@ -145,6 +145,7 @@ if (length(date_sequence) > 1){
       flag_append <- TRUE
       flag_head <- FALSE
     }
+    Sys.sleep(360)
   }
 }
 # Ordenar y quitar repetidos
