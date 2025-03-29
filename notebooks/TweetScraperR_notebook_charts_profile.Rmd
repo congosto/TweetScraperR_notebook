@@ -1,0 +1,380 @@
+---
+title: "charts profile"
+output:
+  html_document:
+    df_print: paged
+
+params:
+    data_path: "../data"                # Path raiz de los datos
+    dataset_name: "congosto"            # Nombre del dataset
+    username: "congosto"                # Screenname del usuario
+    prefix: "congosto"                  # Prefijo para ficheros de gráficas
+    base_title: "Perfil congosto"       # Título base de las gráficas
+    time_zone: "Europe/Berlin"          # Huso horario
+    #time_zone: "America/Chicago"       # Huso horario
+    show_topics: FALSE                  # (TRUE/FALSE) TRUE si se desea mostrar los topics
+    topics_file: "xxxxxx_topics.csv"    # (Solo si show_topics es TRUE)
+    show_events: FALSE                  # (TRUE/FALSE) TRUE si se desea hacer anotaciones
+    events_file: "xxxxxx_events.csv"    # FALSE si no hay anotaciones, si las hay, nombre del fichero
+---
+
+## TweetScraperR_notebook_charts_profile.Rmd
+
+Genera un conjunto de gráficas parametrizables para un perfil, con los datos descargados con el cuaderno **TweetScraperR_notebook.Rmd** opción Get Tweets Historical Timeline
+
+-   Ritmo de publicación
+    -   Rutina diaria
+    -   Ritmo semanal
+    -   Ritmo anual
+-   Impacto
+    -   Tuits vs. favoritos
+    -   Tuits vs. Rts
+    -   Tuits vs. comentarios
+    -   Tuits vs. impresiones
+    -   Tuits vs. engagement
+    -   Comentarios vs. RTs
+-   Palabras más frecuentes
+-   Menciones
+    -   Nube de usuarios citados
+    -   Evolución acumulada de sitios web
+-   Emoticonos
+    -   Nube
+    -   Evolución acumulada
+-   Topics
+    -   Evolución acumulada
+
+## Código
+
+### setup cuaderno
+
+```{r setup, 	echo = FALSE,message = FALSE,	warning = FALSE,include=FALSE, cache = FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+require("knitr")
+## setting working directory
+opts_knit$set(root.dir = "./")
+
+```
+
+### Importamos las librerías
+
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+if(!"tidyverse" %in% installed.packages()) {install.packages("tidyverse")}
+if(!"lubridate" %in% installed.packages()) {install.packages("lubridate")}
+if(!"ggrepel" %in% installed.packages()) {install.packages("ggrepel")}
+if(!"scales" %in% installed.packages()) {install.packages("scales")}
+if(!"tidytext" %in% installed.packages()) {install.packages("tidytext")}
+if(!"tm" %in% installed.packages()) {install.packages("tm")}
+if(!"ggwordcloud" %in% installed.packages()) {install.packages("ggwordcloud")}
+if(!"RColorBrewer" %in% installed.packages()) {install.packages("RColorBrewer")}
+if (!"ggtext" %in% installed.packages()) {install.packages("ggtext")}
+if(!"glue" %in% installed.packages()) {install.packages("glue")}
+library(tidyverse)       # Suite para datos y gráficos
+library(lubridate)       # Tratamiento de fechas
+library(ggrepel)         # Ubicación no solapada de textos
+library(scales)          # Escalas
+library(tidytext)        # Para manejos de textos
+library(tm)              # Para manejos de textos
+library(ggwordcloud)     # Para crear una nube de palabras
+library(RColorBrewer)    # Paleta de colores
+library(ggtext)          # Dar color a los textos de las leyendas o titulos
+library("glue")
+locale(date_names = "en", date_format = "%AD", time_format = "%AT",
+  decimal_mark = ".", grouping_mark = ",", tz = "Europe/Berlin",
+  encoding = "UTF-8", asciify = FALSE)
+Sys.setlocale(category = "LC_ALL", locale = "english")
+```
+
+### Importamos funciones
+
+```{r funtions, include=FALSE}
+source("utils/utils_charts.R")   # Funciones generales de visualización
+source("utils/charts.R")         # Gráficas de tweets
+source("utils/charts_profile.R") # Gráficas de perfiles de usuarios
+
+```
+
+### Entorno por defecto
+
+```{r environment}
+## Entorno por defecto. No tocar salvo que se quiera usar otro entorno
+data_path <- file.path(params$data_path, params$dataset_name) # Directorio de datos
+image_path <- file.path(data_path, glue("{params$prefix}_graficas")) # Directorio de gráficas
+tweets_meta_file <- file.path(data_path, glue("{params$prefix}_meta.csv")) # datos y metadatos
+tweets_filtered_file <- file.path(data_path, glue("{params$prefix}_filtered.csv")) # datos filtrados
+tweets_filtered_meta_file <- file.path(data_path, glue("{params$prefix}_meta_filtered.csv")) # datos y metadatos filtrados
+filter_file <- file.path(data_path,params$filter_file) # filtro
+false_pos_file <- file.path(data_path, params$false_pos_file) # falsos positivos
+topics_file <- file.path(data_path, params$topics_file) # fichero de topics
+events_file <- file.path(data_path, params$events_file) # fichero de eventos
+if(!file.exists(image_path)) {
+ dir.create(image_path)
+}
+
+```
+
+### Lectura de ficheros y filtrado por usuario
+
+```{r read_files}
+
+# Lectura de tweets con metadatos
+tweets_meta <- read_csv(
+  tweets_meta_file,
+  show_col_types = FALSE
+) %>%
+  filter (username == params$username)
+#quitamos repetidos
+ tweets_meta <- tweets_meta %>%
+   group_by(url) %>% slice(1) %>%
+   ungroup()
+if (params$show_topics){
+  topics <- read_csv(
+    topics_file,
+    show_col_types = FALSE
+  ) 
+}
+if (params$show_events){
+  events <- read_csv(
+    events_file,
+    show_col_types = FALSE
+  )
+}else {events= NULL}
+
+
+```
+
+### Adaptar la zona horaria y redondear por slot time
+
+```{r set_time, include=FALSE}
+
+# calculamos el slot time
+max_date <- max(tweets_meta$fecha, na.rm=TRUE)
+min_date <- min(tweets_meta$fecha, na.rm=TRUE)
+num_days <- as.numeric(difftime(max_date ,min_date , units = c("days")))
+slot_time <- ifelse(num_days <= 15, "hour", "day")
+
+# Redondear por slot time
+tweets_meta <- tweets_meta %>%
+  mutate(fecha = as.POSIXct(floor_date(lubridate::with_tz(fecha, params$time_zone),"sec"))) %>%
+  filter (!is.na(fecha)) %>%
+  mutate(fecha_slot = as.POSIXct(floor_date(fecha,slot_time)))
+max_date <- max(tweets_meta$fecha_slot, na.rm=TRUE)
+min_date <- min(tweets_meta$fecha_slot, na.rm=TRUE)
+
+```
+
+### Colores
+
+```{r color}
+
+color_tweets = "#4682b4"
+color_reach = "#6e322d"
+color_RT ="#6e322d"
+color_comments = "#ff7733"
+color_likes = "#50af4a"
+color_impresions = "#bf609f"
+color_engagement = "#778dcf"
+COLOR_TEXTO =  "#5a5856" 
+```
+
+### Gráficas
+
+#### Ritmo de publicación
+
+##### Rutina diaria
+
+```{r daily_routine, echo=FALSE, fig.height=12, fig.width=9, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+p<- daily_routine(tweets_meta,  min_date, max_date, params$time_zone, params$show_events) 
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_daily_routine_total.png")))
+```
+
+##### Rutina semanal
+
+```{r rhythm_week}
+p <- rhythm_week (tweets_meta, min_date, max_date, params$time_zone)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_rhythm_week_total.png")))
+```
+
+##### Rutina mensual
+
+```{r hythm_month, message=FALSE}
+p <- rhythm_month (tweets_meta,  min_date, max_date, params$time_zone)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_rhythm_month_total.png")))
+
+```
+
+#### Impacto
+
+Las medidas de impacto recogen las reacciones a los tweets publicados, el orden es de más positivo a más negativos
+
+-   **Favoritos**: se representa con un corazón y significa que el mensaje gusta
+-   **Difusión**: la difusión agrupa el RT y la cita. No se pueden separar estos contadores con el scraping
+-   **Comentarios**: Los comentarios pueden ser tanto positivos cómo negativos, pero en las dinámicas de crispación de Twitter suelen ser más críticos que favorables
+
+Por comprobaciones empíricas si en un mensaje la suma de comentarios y citas es superior que el de RTs implica que ese tweet ha sido muy polémico
+
+##### Tuits vs. Favoritos
+
+```{r impact_fav, echo=FALSE, fig.width=9, fig.height=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+p <- impact_tweets(tweets_meta, min_date, max_date, "Fav", color_likes)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_fav_total.png")))
+
+
+```
+
+##### Tuits vs. RTs
+
+```{r impact_RTs, echo=FALSE, fig.width=9, fig.height=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+p <- impact_tweets(tweets_meta, min_date, max_date, "RTs", color_RT)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_RTs_total.png")))
+
+
+```
+
+##### Tuits vs. Comentarios
+
+```{r impact_replies, echo=FALSE, fig.width=9, fig.height=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+p <- impact_tweets(tweets_meta, min_date, max_date, "Replies", color_comments)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_replies_total.png")))
+
+
+```
+
+##### Tuits vs. impresiones
+
+```{r impact_impresions, echo=FALSE, fig.width=9, fig.height=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+p <- impact_tweets(tweets_meta, min_date, max_date, "Impresions", color_impresions )
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_impresions_total.png")))
+```
+
+##### engagement
+
+```{r engagement, echo=FALSE, fig.width=9, fig.height=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+p <- engagement_tweets(tweets_meta, min_date, max_date, color_engagement)
+print(p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}__engagement_total.png")))
+```
+
+##### Comentarios vs. RTs
+
+```{r comments_vs_RTs, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+
+p<- draw_comments_vs_RTs (
+  tweets_meta, 
+  min_date, max_date,
+  0, 0) 
+print (p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_comments_vs_RTs.png")))
+
+```
+
+#### Palabras más frecuentes
+
+```{r frecuency_word, message=FALSE, warning=FALSE}
+
+p<- draw_word_frequency (
+  tweets_meta, 
+  min_date, max_date,
+  FALSE) 
+print (p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_word_cloud.png")))
+
+```
+
+#### Menciones
+
+##### Nube de usuarios citados
+
+```{r frecuency_cited, message=FALSE, warning=FALSE}
+
+p <- draw_col_frequency(
+  tweets_meta,
+  "user_citado", 
+  min_date, max_date,
+  "Cited users",
+  FALSE)
+print(p)
+
+
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_users_cited_cloud.png")))
+
+```
+
+##### Evolución acumulada de sitios web
+
+```{r Aaccumulated_sites, fig.height=6, fig.width=10}
+p <- draw_site_acumulate(
+  tweets_meta, 
+  min_date, max_date,
+  FALSE)
+print(p)
+  # Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_sites_RT.png")))
+
+```
+
+#### Emoticonos
+
+##### Nube
+
+```{r cloud_frecuency_emoji, fig.height=4, fig.width=3, message=FALSE, warning=FALSE}
+p <- draw_emoji_frequency(
+  tweets_meta,
+  min_date, max_date,
+  FALSE)
+# print(p) no se puede mostrar la gráfica por problemas con los emojis, pero se guarda bien en disco
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_emoticones_cloud.png")))
+```
+
+##### Evolución acumulada
+
+```{r evol_frecuency_emoji, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+p <- draw_emojis_acumulate(
+  tweets_meta, 
+  min_date, max_date,
+  FALSE)
+print(p)
+  # Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_emojis_RTs.png")))
+```
+
+#### Topics
+
+##### Evolución acumulada
+
+```{r evol_topics, fig.height=6, fig.width=10, message=FALSE}
+if (params$show_topics){
+  p <- draw_topics_acumulate(
+    tweets_meta,
+    topics, 
+    min_date, max_date,
+    FALSE)
+  print(p)
+  # Salvamos la gráfica en un archivo
+  ggsave(file.path(image_path,glue("{params$prefix}_topics.png")))
+}
+
+```
