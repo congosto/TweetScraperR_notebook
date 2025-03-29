@@ -44,18 +44,59 @@ En este cuaderno se han adaptado las librerías **TweetScraperR** a la forma de 
 
 1.  **Get Tweets Historical Search**: descarga una consulta en un periodo definido con una frecuencia establecida
 2.  **Get Tweets Historical Timeline**: descarga el timeline de una lista de usuarios en un periodo definido con una frecuencia establecida. No se obtienen los RTs porque equivale a una consulta del tipo from:usuario
-3.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
+3.  **Get Tweets Timeline**: descarga el timeline de un usuario, incluidos RTs. El formato de los datos es diferente a las opciones 1 y 2
+4.  **Get Tweets Replies**: descarga las respuestas de los tuits de un dataset. El formato de los datos es similar a las opciones 1 y 2, pero tiene dos columnas adicionales para identificar el origen de la respuesta.
+5.  **Get Tweets Cites**: descarga las citas de los tuits de un dataset. El formato de los datos es igual a las opciones 1 y 2
+6.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
 
 ### TweetScraperR_notebook_charts.Rmd
 
-Genera un conjunto de gráficas parametrizables con los datos descargados con el cuaderno **TweetScraperR_notebook.Rmd**
+Genera un conjunto de gráficas para el análisis de tuits descargados con el chunk **Get-Tweets-Historical-Search** del cuaderno **TweetScraperR_notebook.Rmd**
 
--   Tweets vs. alcance con influencers (con o sin zoom)
--   Tweets vs. alcance
--   Tweets vs. RTs
--   Palabras más frecuentes (con y sin amplificación)
--   Usuarios citados
+-   Impacto
+    -   Tuits vs. alcance con influencers (con o sin zoom)
+    -   Tuits vs. alcance
+    -   Tuits vs. RTs con influencers
+    -   Tuits vs. RTs
+    -   comments vs. RTs
+-   Palabras más frecuentes
+    -   Sin amplificación
+    -   Con amplificación
+-   Menciones
+    -   Nube de usuarios citados
+    -   Evolución acumulada de sitios web
 -   Emoticonos
--   Acumulado de la aparición de sitios Web (con amplificación)
--   Acumulado de la aparición de topics (con y sin amplificación)
--   Acumulado de la aparición de emojis (con amplificación)
+    -   Nube
+    -   Evolución acumulada con con amplificación
+-   Topics
+    -   Evolución acumulada
+    -   Evolución acumulada con amplificación
+
+### TweetScraperR_notebook_charts_profile.Rmd
+
+Genera un conjunto de gráficas para el análisis de usuarios descargados con el chunk **Get-Tweets-Historical-Timeline** del cuaderno **TweetScraperR_notebook.Rmd**
+
+-   Ritmo de publicación
+    -   Rutina diaria
+    -   Ritmo semanal
+    -   Ritmo anual
+-   Impacto
+    -   Tuits vs. favoritos
+    -   Tuits vs. Rts
+    -   Tuits vs. comentarios
+    -   Tuits vs. impresiones
+    -   Tuits vs. engagement
+    -   Comentarios vs. RTs
+-   Palabras más frecuentes
+-   Menciones
+    -   Nube de usuarios citados
+    -   Evolución acumulada de sitios web
+-   Emoticonos
+    -   Nube
+    -   Evolución acumulada
+-   Topics
+    -   Evolución acumulada
+
+### TweetScraperR_notebook_charts_graph.Rmd
+
+Gernera un grafo en formato **gdf** con los tuits descargados con el chunk **Get-Tweets-Replies** o **Get-Tweets-Cites** el cuaderno **TweetScraperR_notebook.Rmd**
