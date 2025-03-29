@@ -94,8 +94,8 @@ data_path = "../data"
 if(!file.exists(data_path)) {
  dir.create(img_path)
 }
-assign("USER", "rest_017",  envir = .GlobalEnv)
-assign("PASS", "milikk",  envir = .GlobalEnv)
+assign("USER", "xxxxxx",  envir = .GlobalEnv)
+assign("PASS", "xxxxxx",  envir = .GlobalEnv)
 closeTwitter()
 Sys.sleep(10)
 openTwitter()
