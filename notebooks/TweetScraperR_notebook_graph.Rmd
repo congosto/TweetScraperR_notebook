@@ -1,0 +1,227 @@
+---
+title: "graph"
+output:
+  html_document:
+    df_print: paged
+
+params:
+    data_path: "../data"                # Path raiz de los datos
+    dataset_name: "trump"               # Nombre del dataset
+    prefix: "trump"                     # Prefijo para ficheros de gráficas
+    relation: "reply"                     # Relación (reply | quote | all) 
+    zoom: FALSE                         # Grafo acotado en fechas
+    min_date_zoom: "2025-02-20 00:30:00"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
+    max_date_zoom: "2025-02-22 01:01:01"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
+---
+
+## TweetScraperR_notebook_graph.Rmd
+
+Genera un fichero gdf para que sirva de entrada a Gephi de un dataset descargado con *TweetScraperR_notebook.Rmd**. Las relaciones pueden ser respuestas (reply) o citas (quote) o ambas (all) . 
+
+El formato gdf es texto plano, compuesto de dos zonas:
+
+-   Descripción de los nodos: en este caso serán los autores de los tweets:
+-   Descripción de las relaciones: para cada relación, un par formado por el que interactúa y el interactuado
+
+También permite acotarlo en  un rango temporal.
+
+
+```{r setup, 	echo = FALSE,message = FALSE,	warning = FALSE,include=FALSE, cache = FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	message = FALSE,
+	warning = FALSE
+)
+require("knitr")
+## setting working directory
+opts_knit$set(root.dir = "./")
+
+```
+
+## Código
+
+### Importamos las librerías
+
+```{r libraries, message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+if(!"tidyverse" %in% installed.packages()) {install.packages("tidyverse")}
+if(!"lubridate" %in% installed.packages()) {install.packages("lubridate")}
+if(!"glue" %in% installed.packages()) {install.packages("glue")}
+library(tidyverse)        # Manejo de datos y gráficas
+library(lubridate)        # Manejo de fechas
+library("glue")
+```
+
+### Entorno por defecto
+
+```{r environment}
+## Entorno por defecto. No tocar salvo que se quiera usar otro entorno
+data_path <- file.path(params$data_path, params$dataset_name) # Directorio de datos
+tweets_replies_file <- file.path(data_path, glue("{params$prefix}_meta_replies.csv")) # tweets respuestas
+tweets_cites_file <- file.path(data_path, glue("{params$prefix}_meta_cites.csv")) # tweets citas
+if (params$zoom){
+  tweets_gdf_file <- file.path(data_path, glue("{params$prefix}_{params$relation}_zoom.gdf")) # fichero gdf
+}else{
+  tweets_gdf_file <- file.path(data_path, glue("{params$prefix}_{params$relation}.gdf")) # fichero gdf
+}
+```
+
+### Lectura de ficheros y filtrado
+
+```{r read_files}
+
+
+if(params$relation == "reply"){
+  # Leer fichero replies
+  tweets <- read_csv(
+    tweets_replies_file,
+    show_col_types = FALSE
+  ) %>%
+  filter( username != "https://x.comNA") %>%
+  # Normalizar a origin-target
+  rename(
+    origin = username,
+    target = respuesta_a_user
+  ) %>%
+  select (fecha, origin, target)
+}
+if(params$relation == "quote"){
+  # Leer fichero cites
+  tweets <- read_csv(
+    tweets_cites_file,
+    show_col_types = FALSE
+  ) %>%
+  # Normalizar a origin-target
+  rename(
+    origin = username,
+    target = user_citado
+  ) %>%
+  select (fecha, origin, target)
+}
+if(params$relation == "all"){
+  # Leer fichero replies
+  tweets_r <- read_csv(
+    tweets_replies_file,
+    show_col_types = FALSE
+  ) %>%
+  filter( username != "https://x.comNA") %>%
+  # Normalizar a origin-target
+  rename(
+    origin = username,
+    target = respuesta_a_user
+  ) %>%
+  select (fecha, origin, target)
+  # Leer fichero cites
+  tweets_c <- read_csv(
+    tweets_cites_file,
+    show_col_types = FALSE
+  ) %>%
+  # Normalizar a origin-target
+  rename(
+    origin = username,
+    target = user_citado
+  ) %>%
+  select (fecha, origin, target)
+  # Unir
+  tweets <-  rbind(tweets_r, tweets_c)
+}
+# Filtrar si hay zoom
+if (params$zoom){
+  tweets <- tweets %>%
+    filter (fecha >=  params$min_date_zoom & date <=  params$max_date_zoom)
+}
+
+```
+
+## Calculo del top de relaciones entrantes
+
+```{r top_relaciones_entrantes}
+top_in<- tweets %>%
+  group_by(target) %>%
+  summarise(
+    n_in = n(),
+    .groups = "drop"
+  ) %>%
+  ungroup() %>%
+  filter(!is.na(target) ) %>%
+  arrange(desc(n_in))
+```
+
+
+## Calculo del top de relaciones salientes
+
+```{r top_relaciones_entrantes}
+top_out<- tweets %>%
+  group_by(origin) %>%
+  summarise(
+    n_out = n(),
+    .groups = "drop"
+  ) %>%
+  ungroup() %>%
+  filter(!is.na(origin) ) %>%
+  arrange(desc(n_out))
+```
+
+## Generar los nodos y sus atributos
+
+```{r nodes}
+# Nodos origin y target
+nodes_origin  <- tweets %>%
+  #dejar solo un tweet por usuario
+  group_by(origin) %>% 
+  slice(1) %>%
+  ungroup() %>%
+  rename (node =origin)
+nodes_target  <- tweets %>%
+  #dejar solo un tweet por usuario 
+  group_by(target) %>% 
+  slice(1) %>%
+  ungroup() %>%
+  rename (node = target)
+# Unir nodos oring y target
+nodes <- bind_rows(nodes_origin, nodes_target) %>%
+  # Quitar duplicados
+  distinct(node) %>%
+  # Le añadimos el ranking de relaciones entrantes
+  left_join(top_in, by = c( "node" = "target")) %>%
+  # Le añadimos el ranking de relaciones salientes
+  left_join(top_out, by = c( "node" = "origin")) %>%
+  # Cambiamos valores nulos por 0 a n_in
+  mutate(n_in = ifelse(is.na(n_in), 0, n_in)) %>%
+  mutate(n_out = ifelse(is.na(n_out), 0, n_out)) %>%
+  mutate(n_tot = n_in + n_out) %>%
+  # Ordenar de más a menos conexiones
+  arrange(desc(n_tot))
+```
+
+## Generar los arcos y sus atributos
+
+```{r arcs}
+# Aplicar el orden de los nodos
+tweets$origin <- factor(tweets$origin,levels=nodes$node) # Ordenamos según nodos
+arcs  <- tweets %>%
+  # Dejamos solo las relaciones
+  filter(!is.na(target))  %>%
+  # añadimos el tipo de relación
+  mutate(directed = "TRUE") %>%
+  # Agrupamos para contar el número de relaciones de cada usuario
+  group_by(origin,target, directed) %>% 
+    summarise(weight = n(),
+             .groups = "drop")  %>%
+  ungroup() %>%
+  # Aplicamos el mismo orden que los nodos
+  arrange(origin)
+```
+
+## Generar el gdf
+
+```{r write_file}
+# generar la cabecera de los nodos y arcos
+head_nodes <- "nodedef>name VARCHAR,n_in INT, n_out INT, n_tot INT"
+head_arcs <- "edgedef>origin VARCHAR,target VARCHAR, directed BOOLEAN, weight INT"  
+# escribimos el fichero gdf
+write(head_nodes, tweets_gdf_file)
+write_csv(nodes, tweets_gdf_file, append = TRUE, col_names = FALSE)
+write(head_arcs, tweets_gdf_file, append = TRUE,)
+write_csv(arcs, tweets_gdf_file, append = TRUE, col_names = FALSE)
+```
+
