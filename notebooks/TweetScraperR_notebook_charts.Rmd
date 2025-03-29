@@ -12,6 +12,7 @@ params:
     #time_zone: "America/Chicago"       # Huso horario
     min_reach: 10000                    # Aparecerá el autor si el alcance es mayor que esa cantidad
     min_RTs: 100                        # Aparecerá el autor si el alcancenúmero de RTs es mayor que esa cantidad
+    min_comments: 30                    # Mínimo número de comentarios para comparar con RTs
     filter: FALSE                       # (TRUE/FALSE) TRUE si se desea hacer filtro 
     filter_file: "xxxxxxxx.csv"         # (Solo si filter es TRUE) nombre del fichero para filtrar 
     false_pos: FALSE                    # (TRUE/FALSE) TRUE si hay falsos positivos
@@ -22,22 +23,31 @@ params:
     events_file: "xxxxxxxx.csv"         # FALSE si no hay anotaciones, si las hay, nombre del fichero
     zoom: FALSE                         # (TRUE/FALSE) TRUE si se desea hacer zoom 
     min_date_zoom: "YYYY-MM-DD HH:MM:SS"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
-    max_date_zoom: "YYYY-MM-DD HH:MM:SS"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
+    max_date_zoom: "YYYY-MM-DD HH:MM:SS"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD  
 ---
 
 ## TweetScraperR_notebook_charts.Rmd
 
 Genera un conjunto de gráficas parametrizables con los datos descargados con el cuaderno **TweetScraperR_notebook.Rmd**
 
--   Tweets vs. alcance con influencers (con o sin zoom)
--   Tweets vs. alcance
--   Tweets vs. RTs
--   Palabras más frecuentes (con y sin amplificación)
--   Usuarios citados
+-   Impacto
+    -   Tuits vs. alcance con influencers (con o sin zoom)
+    -   Tuits vs. alcance
+    -   Tuits vs. RTs con influencers
+    -   Tuits vs. RTs
+    -   comments vs. RTs
+-   Palabras más frecuentes
+    -   Sin amplificación
+    -   Con amplificación
+-   Menciones
+    -   Nube de usuarios citados
+    -   Evolución acumulada de sitios web
 -   Emoticonos
--   Acumulado de la aparición de sitios Web (con amplificación)
--   Acumulado de la aparición de topics (con y sin amplificación)
--   Acumulado de la aparición de emojis (con amplificación)
+    -   Nube
+    -   Evolución acumulada con con amplificación
+-   Topics
+    -   Evolución acumulada
+    -   Evolución acumulada con amplificación
 
 ```{r setup, 	echo = FALSE,message = FALSE,	warning = FALSE,include=FALSE, cache = FALSE}
 knitr::opts_chunk$set(
@@ -50,7 +60,6 @@ require("knitr")
 opts_knit$set(root.dir = "./")
 
 ```
-
 
 ## Código
 
@@ -94,10 +103,10 @@ source("utils/utils_charts.R")         # Funciones generales
 ```{r environment}
 ## Entorno por defecto. No tocar salvo que se quiera usar otro entorno
 data_path <- file.path(params$data_path, params$dataset_name) # Directorio de datos
-image_path <- file.path(data_path, paste0(params$prefix,"_graficas")) # Directorio de gráficas
-tweets_meta_file <- file.path(data_path, paste0(params$prefix,"_meta.csv")) # datos y metadatos
-tweets_filtered_file <- file.path(data_path, paste0(params$prefix,"_filtered.csv")) # datos filtrados
-tweets_filtered_meta_file <- file.path(data_path, paste0(params$prefix,"_meta_filtered.csv")) # datos y metadatos filtrados
+image_path <- file.path(data_path, glue("{params$prefix}_graficas")) # Directorio de gráficas
+tweets_meta_file <- file.path(data_path, glue("{params$prefix}_meta.csv")) # datos y metadatos
+tweets_filtered_file <- file.path(data_path, glue("{params$prefix}_filtered.csv")) # datos filtrados
+tweets_filtered_meta_file <- file.path(data_path, glue("{params$prefix}_meta_filtered.csv")) # datos y metadatos filtrados
 filter_file <- file.path(data_path,params$filter_file) # filtro
 false_pos_file <- file.path(data_path, params$false_pos_file) # falsos positivos
 topics_file <- file.path(data_path, params$topics_file) # fichero de topics
@@ -127,12 +136,13 @@ tweets_meta <- read_csv(
 if (params$filter) {
   filter <- paste(unlist(read_csv(filter_file )),collapse = "|")
   tweets_meta <- tweets_meta %>%
-    filter(grepl(filter,tolower(texto))) 
+    filter(grepl(tolower(filter),tolower(texto))) 
 }
 if (params$false_pos) {
   false_pos <- paste(unlist(read_csv(false_pos_file )),collapse = "|")
   tweets_meta <- tweets_meta %>%
-    filter(!grepl(false_pos,tolower(texto))) 
+    filter(!grepl(tolower(false_pos),tolower(texto))) %>%
+    filter(!grepl(tolower(false_pos),tolower(username)))
 }
 write_csv (
   tweets_meta ,
@@ -182,179 +192,220 @@ min_date <- min(tweets_meta$fecha_slot, na.rm=TRUE)
 color_tweets = "#4682b4"
 color_reach = "#6e322d"
 color_RT ="#6e322d"
+color_comments = "#ff7733"
 COLOR_TEXTO =  "#5a5856" 
 ```
 
 ### Gráficas
 
-#### Tweets vs. alcance con influencers
+#### Impacto
+
+##### Tuits vs. alcance con influencers
 
 ```{r tweets_alcance-influencers, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 
 
 p <- draw_tweets_vs_reach_influencers (
-  tweets_meta, "total",
+  tweets_meta, 
   min_date, max_date,
   params$min_reach, 25,
   events) 
 print (p)
 # Salvar la gráfica en un archiv
-ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach_influencers.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_reach_influencers.png")))
 
 ```
 
-#### Tweets vs. alcance con influencers zoom
+##### Tuits vs. alcance con influencers zoom
 
 ```{r tweets_alcance-influencers-zoom, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 if (params$zoom){
   p <- draw_tweets_vs_reach_influencers (
-    tweets_meta, "zoom", 
+    tweets_meta, 
     as.POSIXct(params$min_date_zoom),
     as.POSIXct(params$max_date_zoom),
     params$min_reach, 35, events)
   print (p)
    # Salvar la gráfica en un archiv
-  ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach_influencers_zoom.png")))
+  ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_reach_influencers_zoom.png")))
 }
 
 ```
 
-#### Tweets vs. alcance
+##### Tuits vs. alcance
 
 ```{r tweets-alcance, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 p <- draw_tweets_vs_reach(
-  tweets_meta, "total",
+  tweets_meta,
   min_date, max_date,
   events) 
 print (p)
 # Salvar la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_reach.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_reach.png")))
 
 
 ```
 
-#### Tweets vs. RTs
+##### Tuits vs. RTs con influencers
+
+```{r tweets-RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+
+p <- draw_tweets_vs_RTs_influencers(
+  tweets_meta, 
+  min_date, max_date,
+  params$min_RTs,30) 
+print (p)
+# Salvar la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_RTs_influencers.png")))
+
+```
+
+##### Tuits vs. RTs
 
 ```{r tweets-RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 
 p <- draw_tweets_vs_RTs(
-  tweets_meta, "total",
-  min_date, max_date,
-  params$min_RTs,25) 
+  tweets_meta, 
+  min_date, max_date) 
 print (p)
 # Salvar la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_tweets_vs_RTs.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_tweets_vs_RTs.png")))
+
+```
+
+##### Comentarios vs. RTs
+
+```{r comments_vs_RTs, fig.height=5, fig.width=7, message=FALSE, warning=FALSE}
+
+p<- draw_comments_vs_RTs (
+  tweets_meta, 
+  min_date, max_date,
+  params$min_comments, 30) 
+print (p)
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_comments_vs_RTs.png")))
 
 ```
 
 #### Palabras más frecuentes
 
+##### Sin aplificación
+
 ```{r frecuency_word, message=FALSE, warning=FALSE}
 
 p<- draw_word_frequency (
-  tweets_meta, "total",
+  tweets_meta,
   min_date, max_date,
   FALSE) 
 print (p)
 # Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_word_cloud.png")))
 
 ```
 
-#### Palabras más frecuentes con amplificación
+##### Con amplificación
 
 ```{r frecuency_word_RT, message=FALSE, warning=FALSE}
 
 p <- draw_word_frequency (
-  tweets_meta, "total",
+  tweets_meta, 
   min_date, max_date,
   TRUE) 
 print(p)
 
 # Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_word_cloud_RTs.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_word_cloud_RTs.png")))
 ```
 
-#### Usuarios citados
+#### Menciones
+
+##### Nube de usuarios citados
 
 ```{r frecuency_cited, message=FALSE, warning=FALSE}
 
 p <- draw_col_frequency(
   tweets_meta,
-  "user_citado", "total",
+  "user_citado", 
   min_date, max_date,
-  "Cited users")
+  "Cited users",
+  FALSE)
 print(p)
 
-
 # Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_users_cited_cloud.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_users_cited_cloud.png")))
+
+```
+
+##### Evolución acumulada de sitios web con amplificación
+
+```{r Accumulated-sites, fig.height=6, fig.width=10}
+p <- draw_site_acumulate(
+  tweets_meta, 
+  min_date, max_date,
+  TRUE)
+print(p)
+  # Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_sites.png")))
 
 ```
 
 #### Emoticonos
 
+##### Nube
+
 ```{r frecuency_emoji, fig.height=4, fig.width=3, message=FALSE, warning=FALSE}
 p <- draw_emoji_frequency(
-  tweets_meta,"total",
-  min_date, max_date)
+  tweets_meta,
+  min_date, max_date,
+  FALSE)
 # print(p) no se puede mostrar la gráfica por problemas con los emojis, pero se guarda bien en disco
 # Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_emoticones_cloud.png")))
+ggsave(file.path(image_path,glue("{params$prefix}_emoticones_cloud.png")))
 ```
 
-#### Acumulado de las menciones a los sitios Web con amplificación
+##### Evolución acumulada con amplificación
 
-```{r Accumulated-sites, fig.height=6, fig.width=10}
-p <- draw_site_acumulate(
-  tweets_meta, "total",
-  min_date, max_date)
+```{r emojis, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
+p <- draw_emojis_acumulate(
+  tweets_meta, 
+  min_date, max_date,
+  TRUE)
 print(p)
-  # Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_sites.png")))
-
+# La gráfica se ve mal, pero se guarda bien en disco
+# Salvamos la gráfica en un archivo
+ggsave(file.path(image_path,glue("{params$prefix}_emojis_RTs.png")))
 ```
 
-#### Acumulado de la aparición de los topics
+#### Topics
+
+##### Evolución acumulada
 
 ```{r topics, fig.height=6, fig.width=10, message=FALSE}
 if (params$show_topics){
   p <- draw_topics_acumulate(
     tweets_meta,
-    topics, "total",
+    topics, 
     min_date, max_date,
     FALSE)
   print(p)
   # Salvamos la gráfica en un archivo
-  ggsave(file.path(image_path,paste0(params$prefix,"_topics.png")))
+  ggsave(file.path(image_path,glue("{params$prefix}_topics.png")))
 }
 
 ```
 
-#### Acumulado de la aparición de los topics con amplificación
+##### Evolución acumulada con amplificación
 
 ```{r topics_RTs, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
 if (params$show_topics){
   p <- draw_topics_acumulate(
     tweets_meta,
-    topics,"total",
+    topics,
     min_date, max_date,
     TRUE)
   print(p)
   # Salvamos la gráfica en un archivo
-  ggsave(file.path(image_path,paste0(params$prefix,"_topics_RTs.png")))
+  ggsave(file.path(image_path,glue("{params$prefix}_topics_RTs.png")))
 }
 
-```
-
-#### Acumulado de la aparición de emojis con amplificación
-
-```{r emojis, fig.height=6, fig.width=10, message=FALSE, warning=FALSE}
-p <- draw_emojis_acumulate(
-  tweets_meta, "total",
-  min_date, max_date,
-  TRUE)
-print(p)
-  # Salvamos la gráfica en un archivo
-ggsave(file.path(image_path,paste0(params$prefix,"_emojis_RTs.png")))
 ```
