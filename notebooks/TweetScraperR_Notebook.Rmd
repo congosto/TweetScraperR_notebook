@@ -37,9 +37,14 @@ En este cuaderno se han adaptado las librerías **TweetScraperR** a la forma de 
 
 1.  **Get Tweets Historical Search**: descarga una consulta en un periodo definido con una frecuencia establecida
 2.  **Get Tweets Historical Timeline**: descarga el timeline de una lista de usuarios en un periodo definido con una frecuencia establecida. No se obtienen los RTs porque equivale a una consulta del tipo from:usuario
-3.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
+3.  **Get Tweets Timeline**: descarga el timeline de un usuario, incluidos RTs. El formato de los datos es diferente a las opciones 1 y 2
+4.  **Get Tweets Replies**: descarga las respuestas de los tuits de un dataset. El formato de los datos es similar a las opciones 1 y 2, pero tiene dos columnas adicionales para identificar el origen de la respuesta.
+5.  **Get Tweets Cites**: descarga las citas de los tuits de un dataset. El formato de los datos es igual a las opciones 1 y 2
+6.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
 
 ### Cómo usar el cuaderno
+
+Se aconseja usarlo en modo visual para poder acceder a los chunks por índice.
 
 1.  Cuando se abre el cuaderno, ejecutar los chunks: **Init notebook**, **Import libraries**, **Import functions**
 2.  En el chunk de **Open session** rellenar el usuario y password para la descarga y ejecutarlo.
@@ -68,8 +73,10 @@ opts_knit$set(root.dir = "./")
 if(!"tidyverse" %in% installed.packages()) {install.packages("tidyverse")}
 if(!"devtools" %in% installed.packages()) {install.packages("devtools")}
 if(!"TweetScraperR" %in% installed.packages()) {devtools::install_github("agusnieto77/TweetScraperR")}
+if(!"glue" %in% installed.packages()) {install.packages("glue")}
 library("tidyverse")
 library("TweetScraperR")
+library("glue")
 ```
 
 #### Import functions
@@ -87,14 +94,17 @@ data_path = "../data"
 if(!file.exists(data_path)) {
  dir.create(img_path)
 }
-assign("USER", "xxxxx",  envir = .GlobalEnv)
-assign("PASS", "xxxxx",  envir = .GlobalEnv)
+assign("USER", "rest_017",  envir = .GlobalEnv)
+assign("PASS", "milikk",  envir = .GlobalEnv)
+closeTwitter()
+Sys.sleep(10)
 openTwitter()
 ```
 
 #### Get Tweets Historical Search
 
 ```{r Get-Tweets-Historical-Search, message=TRUE, warning=TRUE}
+# Parámetros
 data_path = "../data"
 dataset <- "trump"
 prefix <- "trump"
@@ -102,11 +112,14 @@ query <- "trump"
 since <- "2025-02-12 00:00:01"
 until <- "2025-02-18 00:00:01"
 frecuency <- "8 hours"
-
+sleep_time <- 300
+  
+# Entorno ficheros
 output <- file.path(data_path,dataset)
 output_file <- file.path(output,paste0(prefix,".csv"))
 output_meta_file <- file.path(output,paste0(prefix,"_meta.csv"))
 
+# Contexto
 flag_append <- FALSE
 flag_head <- TRUE
 last_date <- get_context_search(output,prefix)
@@ -116,28 +129,27 @@ if (!is.null (last_date)){
   since <- last_date
 }
 
+# Descarga
 date_sequence <- seq(as.POSIXct(since), as.POSIXct(until), by=frecuency)
 if (length(date_sequence) > 1){
   for (i in 1:(length(date_sequence) - 1))  {
     ini_date = paste0(gsub(" ", "_", date_sequence[[i]]),"_UTC")
     end_date = paste0(gsub(" ", "_", date_sequence[[i+1]]),"_UTC")
-    print(paste(ini_date, end_date))
-    tweets <- getTweetsHistoricalSearch (
+    print(glue("Desde {ini_date} hasta {end_date}"))
+    tweets <- getTweetsHistoricalSearch(
       search = query,
-      timeout = 10,
+      timeout = 20,
       n_tweets =5000,
       since = ini_date,
       until = end_date,
-      xuser = Sys.getenv(USER),
-      xpass = Sys.getenv(PASS),
       dir = NULL,
       save = FALSE  
     ) 
     if (!is.null(tweets)){
       meta_tweets <- extractTweetsData(tweets)
       tweets <- tweets %>%
-      select(- art_html) %>%
-      mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+        select(- art_html) %>%
+        mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
       write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
       meta_tweets <- format_meta_tweets(meta_tweets) 
       write_csv (meta_tweets, output_meta_file, append = flag_append, col_names = flag_head)
@@ -145,9 +157,14 @@ if (length(date_sequence) > 1){
       flag_append <- TRUE
       flag_head <- FALSE
     }
-    Sys.sleep(360)
+    if (i < (length(date_sequence) - 1)) {  # No esperar después de la última iteración
+      Sys.sleep(3)
+      print(glue("Esperando {sleep_time} segundos antes de la próxima iteración...\n"))
+      Sys.sleep(sleep_time-3)
+    }
   }
 }
+
 # Ordenar y quitar repetidos
 print ("Removing duplicates and sorting by user/date")
 output_order_file <- file.path(output,paste0(prefix,"_order.csv"))
@@ -172,22 +189,27 @@ La query que realiza es from:user since:xxx-xx-xx until:xxxx-xx-xx
 OJO!!! no descarga RTs realizados por el usuario, solo tweets propios
 
 ```{r Get-Tweets-Historical-Timeline, message=TRUE, warning=TRUE}
+# Parámetros
 data_path = "../data"
 dataset <- "congosto"
 prefix <- "congosto"
 since <- "2025-01-25 00:00:01"
 until <- "2025-02-18 00:00:01"
 frecuency <- "1 day"
+sleep_time <- 300
 
-output <- file.path(data_path,dataset)
-output_file <- file.path(output,paste0(prefix,".csv"))
-output_meta_file <- file.path(output,paste0(prefix,"_meta.csv"))
-
+# Lista de usuarios para descargar
 list_users = c(
 "congosto",
 "t_hoarder"
 )
 
+# Entorno ficheros
+output <- file.path(data_path,dataset)
+output_file <- file.path(output,paste0(prefix,".csv"))
+output_meta_file <- file.path(output,paste0(prefix,"_meta.csv"))
+
+#contexto
 flag_append <- FALSE
 flag_head <- TRUE
 context <- get_context_user(output, prefix)
@@ -197,6 +219,8 @@ if (!is.null (context)){
   users_downloaded <- context$username
   dates_downloaded <- context$last_date
 }
+
+# Descarga
 for (i_user in 1:(length(list_users))){
   since_partial <- since
   if (!is.null (context)){
@@ -207,29 +231,27 @@ for (i_user in 1:(length(list_users))){
     }
   }
   user <- list_users[[i_user]]
-  print(paste("--> download user", user))
+  print(glue("--> download user {user}"))
   date_sequence <- seq(as.POSIXct(since_partial), as.POSIXct(until), by=frecuency)
   if (length(date_sequence) > 1){
     for (i_date in 1:(length(date_sequence) - 1))  {
       ini_date = paste0(gsub(" ", "_", date_sequence[[i_date]]),"_UTC")
       end_date = paste0(gsub(" ", "_", date_sequence[[i_date+1]]),"_UTC")
-      print(paste(ini_date, end_date))
+      print(glue("Desde {ini_date} hasta {end_date}"))
       tweets <- getTweetsHistoricalTimeline (
         username = user,
         timeout = 10,
         n_tweets = 5000,
         since = ini_date,
         until = end_date,
-        xuser = Sys.getenv(USER),
-        xpass = Sys.getenv(PASS),
         dir = NULL,
         save = FALSE  
       ) 
       if (!is.null(tweets)){
         meta_tweets <- extractTweetsData(tweets)
         tweets <- tweets %>%
-        select(- art_html) %>%
-        mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+          select(- art_html) %>%
+          mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
         write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
         meta_tweets <- format_meta_tweets(meta_tweets) 
         write_csv (meta_tweets, output_meta_file, append = flag_append, col_names = flag_head)
@@ -237,6 +259,11 @@ for (i_user in 1:(length(list_users))){
         flag_head <- FALSE
       }
       put_context_user(output, date_sequence[[i_date+1]],i_user, user)
+      if (i_date < (length(date_sequence) - 1)) {  # No esperar después de la última iteración
+        Sys.sleep(3)
+        print(glue("Esperando {sleep_time} segundos antes de la próxima iteración...\n"))
+        Sys.sleep(sleep_time-3)
+      }
     }
   }
 }
@@ -259,24 +286,266 @@ write_csv (tweets_meta, output_meta_order_file)
 
 ```
 
+#### Get Tweets Timeline
+
+Descarga el timeline de un usuario
+
+```{r Get-Tweets-Timeline, message=TRUE, warning=TRUE}
+# Parámetros
+dataset <- "congosto"
+prefix <- "congosto_tl"
+sleep_time <- 300
+
+# Lista de usuarios para descargar 
+list_users = c(
+  "congosto",
+  "t_hoarder"
+)
+
+# Entorno ficheros
+output <- file.path(data_path,dataset)
+output_file <- file.path(output,paste0(prefix,".csv"))
+
+# Contexto
+flag_append <- FALSE
+flag_head <- TRUE
+users_downloaded <- list()
+dates_downloaded <- list()
+context <- get_context_user(output, prefix)
+if (!is.null (context)){
+  flag_append <- TRUE
+  flag_head <- FALSE
+  users_downloaded <- context$username
+  dates_downloaded <- context$last_date
+}
+
+# Descarga
+for (i_user in 1:(length(list_users))){
+  user <- list_users[[i_user]]
+  if (is.element(user,users_downloaded)){
+    print(glue("--> {user} already downloaded"))
+  }else{
+    openTimeline()
+    print(glue("--> download user {user}"))
+    tweets <- getTweetsTimeline (
+      username = user,
+      n_tweets = 5000,
+      xuser = Sys.getenv(USER),
+      xpass = Sys.getenv(PASS),
+      dir = NULL,
+      save = FALSE  
+    ) 
+    if (!is.null(tweets)){
+      tweets <- tweets %>%
+        mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+      write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
+      flag_append <- TRUE
+      flag_head <- FALSE
+    }
+    put_context_user(output, max(tweets$fecha), i_user, user)
+    if (i_user < length(list_users)) {  # No esperar después de la última iteración
+      Sys.sleep(3)
+      glue("Esperando {sleep_time} segundos antes de la próxima iteración...\n")
+      Sys.sleep(sleep_time-3)
+    }
+    closeTimeline()
+  }
+}
+# Ordenar y quitar repetidos
+print ("Removing duplicates and sorting by user/date")
+output_order_file <- file.path(output,paste0(prefix,"_order.csv"))
+tweets <- read_csv(output_file, show_col_types = FALSE) %>%
+  group_by(url)  %>%
+  slice (1) %>%
+  arrange(user,fecha)
+write_csv (tweets, output_order_file)
+
+```
+
+#### Get Tweets Replies
+
+```{r Get-Tweets-Replies, message=TRUE, warning=TRUE}
+# Parámetros
+data_path = "../data"
+dataset <- "trump"
+prefix <- "trump"
+min_replies <- 100  # Mínimo número de replies para descargar
+sleep_time <- 300
+
+# Entorno ficheros
+file_in <- file.path(data_path,dataset,paste0(prefix,"_meta.csv"))
+output <- file.path(data_path,dataset)
+output_file <- file.path(output,paste0(prefix,"_replies.csv"))
+output_meta_file <- file.path(output,paste0(prefix,"_meta_replies.csv"))
+
+# Seleccionar tweets para descargar sus comentarios
+tweets <- read_csv(file_in, show_col_types = FALSE) %>%
+  filter (respuestas >= min_replies) %>%
+  mutate(tweet_id = str_extract(url, "\\d+$")) %>%
+  arrange(tweet_id)
+list_tweets_id <- tweets$tweet_id
+list_tweets_url <- tweets$url
+
+# Contexto
+flag_append <- FALSE
+flag_head <- TRUE
+last_tweet_id <- get_context_replies(output,prefix)
+if (!is.null (last_tweet_id)){
+  flag_append <- TRUE
+  flag_head <- FALSE
+}else{last_tweet_id <- 0}
+
+# Descarga
+for (i in 1:(length(list_tweets_id))){
+  if (list_tweets_id[[i]] > last_tweet_id){
+    print(glue("Download replies from {list_tweets_url[[i]]} {i}/{length(list_tweets_id)}"))
+    tweets <- getTweetsReplies(
+      url = list_tweets_url[[i]],
+      timeout = 10,
+      n_tweets =5000,
+      dir = NULL,
+      save = FALSE  
+    ) 
+    if (!is.null(tweets)){
+      meta_tweets <- extractTweetsData(tweets) %>%
+        mutate(respuesta_a_tweet = list_tweets_url[[i]]) %>%
+        mutate(respuesta_a_user = sub("https://x.com/(.*)/status/.*", "\\1", respuesta_a_tweet))
+      tweets <- tweets %>%
+        select(- art_html) %>%
+        mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+      write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
+      meta_tweets <- format_meta_replies(meta_tweets) 
+      write_csv (meta_tweets, output_meta_file, append = flag_append, col_names = flag_head)
+      flag_append <- TRUE
+      flag_head <- FALSE
+    }
+    put_context_replies(output, prefix, list_tweets_id[[i]])
+    if (i < length(list_tweets_id)) {  # No esperar después de la última iteración
+      Sys.sleep(3)
+      print(glue("Esperando {sleep_time} segundos antes de la próxima iteración...\n"))
+      Sys.sleep(sleep_time-3)
+    }
+  }
+}
+# Ordenar y quitar repetidos
+print ("Removing duplicates and sorting by user/date")
+output_order_file <- file.path(output,paste0(prefix,"_order.csv"))
+output_meta_order_file <- file.path(output,paste0(prefix,"_meta_order.csv"))
+tweets <- read_csv(output_file, show_col_types = FALSE) %>%
+  group_by(url)  %>%
+  slice (1) %>%
+  arrange(fecha)
+write_csv (tweets, output_order_file)
+tweets_meta <- read_csv(output_meta_file, show_col_types = FALSE) %>%
+  group_by(url)  %>%
+  slice (1) %>%
+  arrange(fecha)
+write_csv (tweets_meta, output_meta_order_file)
+
+```
+
+#### Get Tweets Cites
+
+```{r Get-Tweets-Cites, message=TRUE, warning=TRUE}
+# Parámetros
+data_path = "../data"
+dataset <- "trump"
+prefix <- "trump"
+min_RTs <- 100  # Mínimo número de RTs para descargar citas
+sleep_time <- 300
+
+# Entorno ficheros
+file_in <- file.path(data_path,dataset,paste0(prefix,"_meta.csv"))
+output <- file.path(data_path,dataset)
+output_file <- file.path(output,paste0(prefix,"_cites.csv"))
+output_meta_file <- file.path(output,paste0(prefix,"_meta_cites.csv"))
+
+# Seleccionar tweets para descargar sus comentarios
+tweets <- read_csv(file_in, show_col_types = FALSE) %>%
+  filter (reposteos >= min_RTs) %>%
+  mutate(tweet_id = str_extract(url, "\\d+$")) %>%
+  arrange(tweet_id)
+list_tweets_id <- tweets$tweet_id
+list_tweets_url <- tweets$url
+
+# Contexto
+flag_append <- FALSE
+flag_head <- TRUE
+last_tweet_id <- get_context_cites(output,prefix)
+if (!is.null (last_tweet_id)){
+  flag_append <- TRUE
+  flag_head <- FALSE
+}else{last_tweet_id <- 0}
+
+# Descarga
+for (i in 1:(length(list_tweets_id))){
+  if (list_tweets_id[[i]] > last_tweet_id){
+    print(glue("Download quotes from {list_tweets_url[[i]]} {i}/{length(list_tweets_id)}"))
+    tweets <- getTweetsCites(
+      url = list_tweets_url[[i]],
+      timeout = 10,
+      n_tweets =5000,
+      dir = NULL,
+      save = FALSE  
+    ) 
+    if (!is.null(tweets)){
+      meta_tweets <- extractTweetsData(tweets) %>%
+        mutate(tweet_citado = list_tweets_url[[i]]) %>%
+        mutate(user_citado = sub("https://x.com/(.*)/status/.*", "\\1", tweet_citado))
+      tweets <- tweets %>%
+        select(- art_html) %>%
+        mutate (tweet = str_replace_all (tweet, '[\n\r]+',' '))
+      write_csv (tweets, output_file, append = flag_append, col_names = flag_head)
+      meta_tweets <- format_meta_tweets(meta_tweets) 
+      write_csv (meta_tweets, output_meta_file, append = flag_append, col_names = flag_head)
+      flag_append <- TRUE
+      flag_head <- FALSE
+    }
+    put_context_cites(output, prefix, list_tweets_id[[i]])
+    if (i < length(list_tweets_id)) {  # No esperar después de la última iteración
+      Sys.sleep(3)
+      print(glue("Esperando {sleep_time} segundos antes de la próxima iteración...\n"))
+      Sys.sleep(sleep_time-3)
+    }
+  }
+}
+# Ordenar y quitar repetidos
+print ("Removing duplicates and sorting by user/date")
+output_order_file <- file.path(output,paste0(prefix,"_order.csv"))
+output_meta_order_file <- file.path(output,paste0(prefix,"_meta_order.csv"))
+tweets <- read_csv(output_file, show_col_types = FALSE) %>%
+  group_by(url)  %>%
+  slice (1) %>%
+  arrange(fecha)
+write_csv (tweets, output_order_file)
+tweets_meta <- read_csv(output_meta_file, show_col_types = FALSE) %>%
+  group_by(url)  %>%
+  slice (1) %>%
+  arrange(fecha)
+write_csv (tweets_meta, output_meta_order_file)
+
+```
+
 #### Get Tweets images
 
 ```{r Get-Tweets-images, message=TRUE, warning=TRUE}
+# Parámetros
 data_path = "../data"
 dataset = "trump"
 prefix = "trump"
+
 file_in <- file.path(data_path,dataset,paste0(prefix,"_meta.csv"))
 output <- file.path(data_path,dataset,paste0(prefix,"_images"))
 context <- file.path(data_path,dataset,paste0(prefix,"_context_images"))
 output_context <- file.path(context,"context_images.csv")
 if(!file.exists(output)) {
  dir.create(output)
- print (paste("created directory",output))
+ print(glue ("created directory {output}"))
 }
 # obtenemos el contexto
 if(!file.exists(context)) {
  dir.create(context)
- print (paste("created directory",context))
+ print(glue("created directory {context}"))
  writeLines("downloaded", output_context)
  list_downloaded <- list()
 }else{
@@ -289,11 +558,11 @@ tweets <- read_csv(file_in) %>%
 list_images <- unique(tweets$links_img_post)
 group <- get_grupos(list_images, 100)
 for (i in seq_along(group)) {
-  print (paste("group ",i))
+  print(glue ("group {i}"))
   group_images <- as.list(group[[i]])
   group_images <- setdiff(group_images, list_downloaded)
   if (length(group_images) > 0){
-    print( paste("Descargando", length(group_images)))
+    print(glue("Descargando {length(group_images)}"))
     getTweetsImages(
       urls = group_images,
       directorio = output)
