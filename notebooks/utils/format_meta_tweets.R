@@ -52,3 +52,31 @@ format_meta_tweets <- function(meta_tweets){
   meta_tweets$urls <- unify_col(meta_tweets$urls)
   return (meta_tweets)
 }
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+# format_meta_replies
+#
+# formata los meta tweets
+#
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+format_meta_replies <- function(meta_tweets){
+  meta_tweets <- meta_tweets %>% 
+    mutate (texto = str_replace_all (texto, '[\n\r]+',' ')) %>%
+    mutate (tweet_citado = str_replace_all (tweet_citado, '[\n\r]+',' ')) %>%
+    mutate (emoticones = ifelse(emoticones == "character(0)",NA,emoticones)) %>%
+    mutate(reproducciones =  str_extract(metricas, "\\d+ (?=reproducciones)")) %>%
+    mutate (links_img_user = ifelse(links_img_user == "character(0)",NA,links_img_user)) %>%
+    mutate (links_img_post = ifelse(links_img_post == "character(0)",NA,links_img_post)) %>%
+    mutate (urls = ifelse(urls == "character(0)",NA,urls)) %>%
+    select (fecha,username,texto,tweet_citado,user_citado,emoticones,
+            respuesta_a_tweet, respuesta_a_user,
+            links_img_user, links_img_post,links_externos,
+            respuestas,reposteos,megustas,reproducciones,metricas,
+            urls,hilo,url,fecha_captura)
+  meta_tweets$emoticones <- unify_col(meta_tweets$emoticones)
+  meta_tweets$links_img_user <- unify_col(meta_tweets$links_img_user)
+  meta_tweets$links_img_post <- unify_col(meta_tweets$links_img_post)
+  meta_tweets$urls <- unify_col(meta_tweets$urls)
+  return (meta_tweets)
+}

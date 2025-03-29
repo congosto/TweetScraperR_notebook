@@ -107,6 +107,28 @@ format_time <- function(ini_date,end_date) {
   )
   return(format_dates)
 }
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+# format_time_2
+#
+# Formato para las fechas del eje x
+#
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+format_time_plain <- function(ini_date,end_date) {
+  num_days <- as.numeric(difftime(end_date ,ini_date , units = c("days")))
+  num_years <- num_days / 365
+  num_months <- num_days / 30
+  num_weeks <- num_days / 7
+  num_hours <- num_days * 24
+  format_dates <- case_when(
+    num_years >= 10 ~ "%Y",
+    num_months >= 12 ~ "%b-%Y",
+    num_weeks >= 25 ~ "%d-%b-%Y",
+    num_days >= 4 ~ "%d-%b-%Y",
+    num_hours >= 0 ~ "%H:00-%d-%b" 
+  )
+  return(format_dates)
+}
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #

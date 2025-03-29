@@ -6,12 +6,10 @@
 # Chart line de doble escala del total tweets vs alcance de los mismos
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, nin_reproducciones, max_overlaps,events) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(fecha_slot >= ini_date & fecha_slot <= end_date)
-  }
+draw_tweets_vs_reach_influencers <- function(df, ini_date, end_date, nin_reproducciones, max_overlaps,events) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   # Agrupamos los tweets por slot de tiempo y calculamos el alcance
   tweets_vs_reach_df <- df %>% 
     group_by(fecha_slot) %>%
@@ -21,19 +19,17 @@ draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, n
       .groups = 'drop'
     ) %>% 
     ungroup() 
+  print (df)
   # Buscamos los influencers de cada una de los slots de tiempo
   tweets_vs_influencer_df <- df %>% 
-    group_by(fecha_slot) %>%
-    reframe(
-      influencer = ifelse(reproducciones >= nin_reproducciones, username, NA),
-      reach = reproducciones,
+    group_by(fecha_slot, username ) %>%
+    summarise(
+      reach = sum(reproducciones),
+      influencer = ifelse(reach >= nin_reproducciones, username, NA),
       .groups = 'drop'
     ) %>%
     ungroup() %>%
-    filter (!is.na(influencer)) %>%
-    group_by (fecha_slot,influencer) %>%
-    slice(1) %>%
-    ungroup()
+    filter (!is.na(influencer))
   # Calculamos las dos escalas
   max_tweets <- max(tweets_vs_reach_df$num_tweets,na.rm = TRUE)
   max_reach <- max(tweets_vs_reach_df$reach,na.rm = TRUE)
@@ -84,9 +80,9 @@ draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, n
     ) +
     #Ajustamos la doble escala
     scale_y_continuous(
-      name = paste("Num. Original tweets per",slot_time), 
+      name = glue("Num. Original tweets per {slot_time}"), 
       labels = label_number(scale_cut = cut_si('')),
-      limits= c(0,limit_y*1.3 ),
+      limits= c(0,limit_y*1.1 ),
       expand= c(0,0),
       sec.axis = dup_axis(
         trans=(~ . * ajuste_escala), 
@@ -97,20 +93,12 @@ draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, n
     scale_size(range = c(1, 2)) +
     # Ponemos los títulos
     labs(
-      title = paste(
-        params$base_title, ":",
-        "<span style='color:",
-        color_tweets,
-        "'>",
-        "Tweets</span>",
-        "per",slot_time,
-        "vs.",
-        "<span style='color:",
-        color_reach,
-        "'>",
-        "Reach influencers</span>"
+      title = glue(
+        "{params$base_title}:<span style='color:{color_tweets}'>
+        Tweets</span> per {slot_time} vs <span style='color:{color_reach}'>
+        Reach influencers</span>"
       ),
-      subtitle = paste0("Reach influencers  >= ",  label_number(scale_cut = cut_si(""))(nin_reproducciones)),
+      subtitle = glue("Reach influencers  >= {label_number(scale_cut = cut_si(''))(nin_reproducciones)}"),
       x = "", 
       color=""
     ) +
@@ -125,10 +113,8 @@ draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, n
       axis.text.y.right = element_text(color = color_reach)
     )
   if (!is.null(events)) {  
-    if (periodo == "zoom"){
     events <-events %>% 
-        filter(date >= ini_date & date <= end_date)
-    }
+      filter(date >= ini_date & date <= end_date)
     p <- p +
       geom_vline(
         data = events,
@@ -138,7 +124,7 @@ draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, n
       ) +
       geom_label (
         data = events,
-        aes (x = date, y = max_tweets * 1.2, label = paste(format(date,"%d-%m-%Y"),"\n",event)),
+        aes (x = date, y = max_tweets * 1.2, label = event),
         color = COLOR_TEXTO,
         size = 3.5,
         vjust = .5
@@ -154,12 +140,10 @@ draw_tweets_vs_reach_influencers <- function(df, periodo,  ini_date, end_date, n
 # Chart line de doble escala del total tweets vs alcance de los mismos
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
+draw_tweets_vs_reach <- function(df, ini_date, end_date, events) {
+
+  df <- df %>% 
+      filter(fecha  >= ini_date  & fecha <= end_date)
   # Agrupamos los tweets por hora y calculamos el alcance
   tweets_vs_reach_df <- df %>% 
     group_by(fecha_slot) %>%
@@ -169,7 +153,7 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
       .groups = 'drop'
     ) %>% 
     ungroup() 
-  # calculamos la media de mensajes y RTs
+  # calculamos la media de mensajes y reach
   mean_reach = round(mean(tweets_vs_reach_df$reach, na.rm = TRUE),1)
   mean_tweets = round(mean(tweets_vs_reach_df$num_tweets, na.rm = TRUE),1)
   # Calculamos las dos escalas
@@ -197,10 +181,7 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
       data = tweets_vs_reach_df %>% top_n(1, num_tweets),
       aes(
         x = fecha_slot, y = num_tweets, 
-        label = paste0(
-          fecha_slot,
-          "\n",
-          "Max. tweets = ",scales::comma(num_tweets))
+        label = glue("{fecha_slot}\nMax. tweets = {scales::comma(num_tweets)}")
       ),
       color = COLOR_TEXTO,
       force = 1,
@@ -217,10 +198,7 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
       data = tweets_vs_reach_df %>%  top_n(1, reach),
       aes(
         x = fecha_slot, y = reach/ajuste_escala, 
-        label = paste0(
-          fecha_slot,
-          "\n",
-          "Max.reach = ",scales::comma(reach))
+        label = glue("{fecha_slot}\nMax.reach = {scales::comma(reach)}")
       ),
       color = COLOR_TEXTO,
       force = 1,
@@ -237,10 +215,10 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
       aes(
       x = ini_date + (end_date - ini_date) * 0.06, # 6% desde el inicio 
       y = limit_y * 1.4,
-      label = paste0(
-        "mean tweets = ",scales::comma(mean_tweets),"\n",
-        "mean reach =", scales::comma(mean_reach)))
-      ,
+      label = glue(
+        "mean tweets = {scales::comma(mean_tweets)}
+         mean reach = {scales::comma(mean_reach)}")
+      ),
       color = COLOR_TEXTO,
       size = 3
     )+
@@ -251,31 +229,23 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
     ) +
     #Ajustamos la doble escala
     scale_y_continuous(
-      name = paste("Num. Original tweets per",slot_time), 
+      name = glue("Num. Original tweets per {slot_time}"), 
       labels = label_number(scale_cut = cut_si('')),
       limits= c(0,limit_y*1.5 ),
       expand= c(0,0),
       sec.axis = dup_axis(
         trans=(~ . * ajuste_escala), 
-        name = paste("Reach per", slot_time),
+        name = glue("Reach per {slot_time}"),
         labels = label_number(scale_cut = cut_si('')) 
       )
     ) +
     scale_size(range = c(1, 2)) +
     # Ponemos los títulos
     labs(
-      title = paste(
-        params$base_title, ":",
-        "<span style='color:",
-        color_tweets,
-        "'>",
-        "Tweets</span>",
-        "per",slot_time,
-        "vs.",
-        "<span style='color:",
-        color_reach,
-        "'>",
-        "Reach</span>"
+      title = glue(
+        "{params$base_title}:<span style='color:{color_tweets}'>
+        Tweets</span> per {slot_time} vs <span style='color:{color_reach}'>
+        Reach</span>"
       ),
        x = "", 
       color=""
@@ -291,10 +261,8 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
       axis.text.y.right = element_text(color = color_reach)
     )
   if (!is.null(events)) {  
-    if (periodo == "zoom"){
-      events <-events %>% 
-        filter(date >= ini_date & date <= end_date)
-    }
+    events <-events %>% 
+      filter(date >= ini_date & date <= end_date)
     p <- p +
       geom_vline(
         data = events,
@@ -304,7 +272,7 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
       ) +
       geom_label (
         data = events,
-        aes (x = date, y = max_tweets * 1.2, label = paste(format(date,"%d-%m-%Y"),"\n",event)),
+        aes (x = date, y = max_tweets * 1.2, label = event),
         color = COLOR_TEXTO,
         size = 3.5,
         vjust = .5
@@ -315,40 +283,139 @@ draw_tweets_vs_reach <- function(df, periodo,  ini_date, end_date, events) {
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #
-# draw_tweets_vs_RTs
+# draw_tweets_vs_RTs con influencers
 #
 # Chart line de doble escala del total tweets vs RTs recibidos
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_overlaps) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
+draw_tweets_vs_RTs_influencers <- function(df, ini_date, end_date, min_RTs, max_overlaps) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   # Agrupamos los tweets por hora y calculamos los RT/hora
   tweets_vs_rt_df <- df %>% 
     group_by(fecha_slot) %>%
     summarise(
       num_tweets = n(),
       num_RTs = sum(reposteos,na.rm=T),
-
+      
       .groups = 'drop'
     ) %>% 
     ungroup() 
   # Buscamos los influencers de cada una de los slots de tiempo
   tweets_vs_influencer_df <- df %>% 
-    group_by(fecha_slot) %>%
-    reframe(
-      influencer = ifelse(reposteos >= min_RTs, username, NA),
-      num_RTs = sum(reposteos),
+    group_by(fecha_slot, username) %>%
+    summarise(
+      num_RTs = sum(reposteos), 
+      influencer = ifelse(num_RTs >= min_RTs, username, NA),
       .groups = 'drop'
     ) %>%
     ungroup() %>%
-    filter (!is.na(influencer)) %>%
-    group_by (fecha_slot,influencer) %>%
-    slice(1) %>%
-    ungroup()
+    filter(!is.na(influencer))
+
+  # Calculamos las dos escalas
+  max_tweets <- max(tweets_vs_rt_df$num_tweets,na.rm = TRUE)
+  max_RT <- max(tweets_vs_rt_df$num_RTs,na.rm = TRUE)
+  ajuste_escala <- max_RT/max_tweets
+  limit_y = max_tweets
+  p <- ggplot() + 
+    # Pintamos la evolución de los tweets originales
+    geom_step(
+      data = tweets_vs_rt_df,
+      aes(x = fecha_slot, y = num_tweets),
+      color = color_tweets,
+      show.legend = FALSE
+    )+
+    # Pintamos la evolución de los RTs
+    geom_point(
+      data = tweets_vs_influencer_df,
+      aes(x = fecha_slot, y = num_RTs/ajuste_escala, size = num_RTs/ajuste_escala),
+      shape = 19,
+      color = color_RT,
+      show.legend = FALSE
+    )+
+    # Pintamos los influencers de los RTs
+    geom_text_repel(
+      data = tweets_vs_influencer_df,
+      aes(
+        x = fecha_slot,
+        y = num_RTs/ajuste_escala,
+        label = influencer
+      ),
+      color = COLOR_TEXTO,
+      ylim = c(0, limit_y*1.1),
+      force = 10,
+      max.overlaps = max_overlaps,
+      max.time = 10,
+      size = 3.5,
+      vjust = .5,
+      segment.size = 0.5,
+      segment.linetype = 2,
+      min.segment.length = 0, 
+      show.legend = FALSE    
+    ) +
+    # Ajustamos la escala de tiempo
+    scale_x_datetime(
+      date_labels = format_time(ini_date, end_date),
+      date_breaks = time_scale(ini_date, end_date)
+    ) +
+    # Ajustamos la doble escala
+    scale_y_continuous(
+      name = glue("Num. Original tweets per {slot_time}"), 
+      labels = label_number(scale_cut = cut_si('')),
+      limits= c(0,limit_y*1.1),
+      expand= c(0,0),
+      sec.axis = dup_axis(
+        trans=(~ . * ajuste_escala), 
+        name = glue("RTs per {slot_time}"),
+        labels = label_number(scale_cut = cut_si(''))
+      )
+    ) +
+    scale_size(range = c(1, 2)) +
+    # Ponemos los títulos
+    labs(
+      title = glue(
+        "{params$base_title}:<span style='color:{color_tweets}'>
+        Tweets</span> per {slot_time} vs <span style='color:{color_RT}'>
+        RTs influencers</span>"
+      ),
+      subtitle = glue("RTs influencers  >= {label_number(scale_cut = cut_si(''))(min_RTs)}"),
+      x = "", 
+      color=""
+    ) +
+    # Aplicamos template
+    my_theme() +
+    theme(
+      legend.position="top",
+      plot.title = element_markdown(),
+      axis.title.y = element_text(color = color_tweets),
+      axis.title.y.right = element_text(color = color_RT),
+      axis.text.y = element_text(color = color_tweets),
+      axis.text.y.right = element_text(color = color_RT)
+    )
+  return(p)
+}
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+# draw_tweets_vs_RTs
+#
+# Chart line de doble escala del total tweets vs RTs recibidos
+#
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+draw_tweets_vs_RTs <- function(df, ini_date, end_date) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
+  # Agrupamos los tweets por hora y calculamos los RT/hora
+  tweets_vs_rt_df <- df %>% 
+    group_by(fecha_slot) %>%
+    summarise(
+      num_tweets = n(),
+      num_RTs = sum(reposteos,na.rm=T),
+      .groups = 'drop'
+    ) %>% 
+    ungroup() 
   # calculamos la media de mensajes y RTs
   mean_RTs = round(mean(tweets_vs_rt_df$num_RTs, na.rm = TRUE),1)
   mean_tweets = round(mean(tweets_vs_rt_df$num_tweets, na.rm = TRUE),1)
@@ -373,34 +440,12 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
       color = color_RT,
       show.legend = FALSE
     )+
-    # Pintamos los influencers de los RTs
-    geom_text_repel(
-      data = tweets_vs_influencer_df,
-      aes(
-        x = fecha_slot,
-        y = num_RTs/ajuste_escala,
-        label = influencer
-      ),
-      ylim = c(0, limit_y*1.1),
-      color = COLOR_TEXTO,
-      force = 1,
-      size = 3.5,
-      nudge_y =  max_tweets * 0.2,
-      segment.size = 0.5,
-      segment.linetype = 2,
-      min.segment.length = 0, 
-      show.legend = FALSE
-    ) +
     # Anotamos el máximo de tweets originales/hora
     geom_text_repel(
       data = tweets_vs_rt_df %>% top_n(1, num_tweets),
       aes(
         x = fecha_slot, y = num_tweets, 
-        label = paste0(
-          fecha_slot,
-          "\n",
-          "Max. tweets = ",scales::comma(num_tweets)
-        ),
+        label = glue("{fecha_slot}\nMax. tweets = {scales::comma(num_tweets)}"),
       ),
       color = COLOR_TEXTO,
       force = 1,
@@ -417,11 +462,7 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
       data = tweets_vs_rt_df %>%  top_n(1, num_RTs),
       aes(
         x = fecha_slot, y = num_RTs/ajuste_escala, 
-        label = paste0(
-          fecha_slot,
-          "\n",
-          "Max.RTs = ",scales::comma(num_RTs)
-        )
+        label = glue("{fecha_slot}\n,Max.RTs = {scales::comma(num_RTs)}")
       ),
       color = COLOR_TEXTO,
       force = 1,
@@ -439,10 +480,11 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
       aes(
         x = ini_date + (end_date - ini_date) * 0.06, # 6% desde el inicio 
         y = limit_y * 1.4,
-        label = paste0(
-          "mean tweets = ",scales::comma(mean_tweets),"\n",
-          "mean RTs =", scales::comma(mean_RTs)))
-      ,
+        label = glue(
+          "mean tweets = {scales::comma(mean_tweets)}
+           mean RTs = {scales::comma(mean_RTs)}"
+        )
+      ),
       color = COLOR_TEXTO,
       size = 3
     )+
@@ -453,33 +495,24 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
     ) +
     # Ajustamos la doble escala
     scale_y_continuous(
-      name = paste("Num. Original tweets per",slot_time), 
+      name = glue("Num. Original tweets per {slot_time}"), 
       labels = label_number(scale_cut = cut_si('')),
       limits= c(0,limit_y*1.5),
       expand= c(0,0),
       sec.axis = dup_axis(
         trans=(~ . * ajuste_escala), 
-        name = paste("RTs per",slot_time),
+        name = glue("RTs per {slot_time}"),
         labels = label_number(scale_cut = cut_si(''))
       )
     ) +
     scale_size(range = c(1, 2)) +
     # Ponemos los títulos
     labs(
-      title = paste(
-        params$base_title, ":",
-        "<span style='color:",
-        color_tweets,
-        "'>",
-        "Tweets</span>",
-        "per",slot_time,
-        "vs.",
-        "<span style='color:",
-        color_reach,
-        "'>",
-        "RTs</span>"
+      title = glue(
+        "{params$base_title}:<span style='color:{color_tweets}'>
+        Tweets</span> per {slot_time} vs <span style='color:{color_RT}'>
+        RTs</span>"
       ),
-      subtitle = paste0("RTs influencers  >= ",  label_number(scale_cut = cut_si(""))(min_RTs)),
       x = "", 
       color=""
     ) +
@@ -496,7 +529,99 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
   return(p)
 }
 
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#
+# draw_comments_vs_RTs
+#
+# scatterplot comments vs RTs
+#
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+draw_comments_vs_RTs <- function(df, ini_date, end_date, min_comments, max_overlaps) {
 
+  df <- df %>% 
+      filter(fecha >= ini_date & fecha <= end_date)
+  # Seleccionamos los perfiles con más comentarios 
+  comments_RTs_df <- df %>% 
+  group_by(username, respuestas) %>%
+  summarise(
+    num_comments = respuestas,
+    num_RTs = reposteos,
+    possible_controversy = (ifelse(num_comments > num_RTs,1,0)),
+    .groups = 'drop'
+  ) %>% 
+  ungroup() %>%
+  filter (num_comments >= min_comments)
+  max_comments <- max(comments_RTs_df$num_comments, na.rm = TRUE)
+  max_RTs <- max(comments_RTs_df$num_RTs, na.rm = TRUE)
+  p <- ggplot() + 
+    # Pintamos los comentarios y RTs
+    geom_point(
+      data = comments_RTs_df,
+      aes(x = num_RTs, y = num_comments),
+      shape = 19,
+      color = color_RT,
+      show.legend = FALSE
+    )+
+    # Pintamos los perfiles
+    geom_text_repel(
+      data = comments_RTs_df,
+      aes(
+        x = num_RTs, y = num_comments, 
+        label = username
+      ),
+      color = COLOR_TEXTO,
+      max.overlaps = max_overlaps,
+      force = 1,
+      size = 3.5,
+      segment.size = 0.5,
+      segment.linetype = 2,
+      min.segment.length = 0, 
+      arrow = arrow(type = 'open', length = unit(.2, 'cm')),
+      show.legend = FALSE
+    ) +
+    # Anotamos el porcentaje de polémica
+    geom_text(
+      data = comments_RTs_df,
+      aes(
+        x = max_RTs * 0.15, # 6% desde el inicio 
+        y = max_comments * 1.05 ,
+        label = glue("{round(sum(possible_controversy)*100 / nrow(comments_RTs_df),0)}% controversy")
+      ),
+      color = COLOR_TEXTO,
+      size = 4
+    )+
+    geom_polygon(
+      aes( 
+        # Coordenadas x,y del triángulo
+        x = c(0, 0, max_comments),  # Coordenadas x del triángulo
+        y = c(0, max_comments * 1.1, max_comments * 1.1),
+      ), 
+      fill = color_comments,
+      alpha = 0.4  # Rellenar con color
+    ) +
+    scale_x_continuous(
+      limits= c(0,max_RTs*1.1),
+      expand= c(0,0)
+      ) +
+    scale_y_continuous(
+      limits= c(0,max_comments*1.1),
+      expand= c(0,0)) +
+    scale_size(range = c(1, 2)) +
+    # Ponemos los títulos
+    labs(
+      title = glue("{params$base_title}: Comments vs. Rts"),
+      subtitle = glue("Comments  >= {label_number(scale_cut = cut_si(''))(min_comments)}"),
+      x = "Num. RTs", 
+      y = "Num. comments", 
+      color=""
+    ) +
+    # Aplicamos template
+    my_theme() +
+    theme(
+      legend.position="top"
+    )
+  return(p)
+}
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 #
 # draw_word_frequency
@@ -505,12 +630,10 @@ draw_tweets_vs_RTs <- function(df, periodo,  ini_date, end_date, min_RTs, max_ov
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 # Obtener las stop words en Inglés, español y catalán
-draw_word_frequency <- function(df, periodo,  ini_date, end_date, RTs) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
+draw_word_frequency <- function(df, ini_date, end_date, RTs) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   custom_stop_words <- bind_rows(
     stop_words,
     data_frame(word = tm::stopwords("spanish"),lexicon = "custom"),
@@ -534,10 +657,13 @@ draw_word_frequency <- function(df, periodo,  ini_date, end_date, RTs) {
     filter (!is.na(word)) %>% # Quitamos textos vacíos
     arrange(desc(freq))  %>% # Ordenamos de mayor a menor frecuencia de aparición
     head (1000)
-  write_csv (
-    word_frequency,
-    file.path(data_path,paste0(params$prefix, "_frequency_word.csv"))
-  )
+  # Solo se escriben las palabras publicadas, no las amplificadas
+  if(RTs == FALSE){
+    write_csv (
+      word_frequency,
+      file.path(data_path,glue("{params$prefix}_frequency_word.csv"))
+    )
+  }
   
   # Generamos los colores para las palabras según frecuencia
   paleta <- brewer.pal(8, "Dark2")
@@ -559,7 +685,7 @@ draw_word_frequency <- function(df, periodo,  ini_date, end_date, RTs) {
     scale_color_gradientn(colors = paleta) +
     # Definimos el título principal y el de los ejes
     labs(
-      title = paste(params$base_title,": most frequent words"),
+      title = glue("{params$base_title}: most frequent words"),
       subtitle = ifelse(RTs == TRUE,"(Adding retweet amplification)",""),
       x = "", y = "",
       color=""
@@ -574,17 +700,15 @@ draw_word_frequency <- function(df, periodo,  ini_date, end_date, RTs) {
 # tagcloud
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-draw_col_frequency <- function(df, column, periodo, ini_date, end_date, element) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
+draw_col_frequency <- function(df, column, ini_date, end_date, element, RTs) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   col_frequency <- mutate (df,col=df[[column]]) %>%
     filter(!is.na(col)) %>%
     group_by(col) %>%     # Agrupamos por palabras   
     summarise(
-      freq = n(),
+      freq = ifelse(RTs == TRUE, n() + sum(reposteos), n()),
       .groups = "drop"
     ) %>%  # Calculamos la frecuencia de cada palabra
     ungroup() %>%
@@ -593,7 +717,7 @@ draw_col_frequency <- function(df, column, periodo, ini_date, end_date, element)
   
   write_csv (
     col_frequency,
-    file.path(data_path,paste0(params$prefix, "_frequency_",column,".csv"))
+    file.path(data_path,glue("{params$prefix}_frequency_{column}.csv"))
   )
   
   # Generamos los colores para las palabras según frecuencia
@@ -614,7 +738,8 @@ draw_col_frequency <- function(df, column, periodo, ini_date, end_date, element)
     scale_color_gradientn(colors = paleta) +
     # Definimos el título principal y el de los ejes
     labs(
-      title = paste(params$base_title, ":", element," frequency"),
+      title = glue("{params$base_title}: {element} frequency"),
+      subtitle = ifelse(RTs == TRUE,"(Adding retweet amplification)",""),
       x = "", y = "",
       color=""
     ) +
@@ -628,23 +753,20 @@ draw_col_frequency <- function(df, column, periodo, ini_date, end_date, element)
 # treemap
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-draw_emoji_frequency <- function(df, periodo, ini_date, end_date) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
-  
+draw_emoji_frequency <- function(df, ini_date, end_date,RTs) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   frecuency_emoji <- df %>%
    filter(!is.na(emoticones)) %>%
-  group_by(emoticones) %>%     # Agrupamos por emoticones 
-  summarise(
-    freq = n(),
-    .groups = "drop"
-  ) %>%  # Calculamos la frecuencia de cada palabra
-  ungroup() %>%
-  arrange(desc(freq))  %>% # Ordenamos de mayor a menor frecuencia de aparición
-  head (100) 
+   group_by(emoticones) %>%     # Agrupamos por emoticones 
+   summarise(
+     freq = ifelse(RTs == TRUE, n() + sum(reposteos), n()),
+     .groups = "drop"
+   ) %>%  # Calculamos la frecuencia de cada palabra
+   ungroup() %>%
+   arrange(desc(freq))  %>% # Ordenamos de mayor a menor frecuencia de aparición
+   head (100) 
   p <- ggplot() +
     # Dibujamos la nube de palabras
     geom_text_wordcloud_area(
@@ -658,7 +780,8 @@ draw_emoji_frequency <- function(df, periodo, ini_date, end_date) {
     scale_radius(range = c(10, 50), limits = c(0, NA)) +
   # Aplicamos una paleta de color
     labs(
-      title = paste(params$base_title,": emojis"),
+      title = glue("{params$base_title}: emojis"),
+      subtitle = ifelse(RTs == TRUE,"(Adding retweet amplification)",""),
       x = "", y = "",
      fill="Frequency"
     ) +
@@ -675,12 +798,10 @@ return(p)
 # chart line
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-draw_site_acumulate <- function(df, periodo, ini_date, end_date) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
+draw_site_acumulate <- function(df, ini_date, end_date, RTs) {
+
+  df <- df %>% 
+    filter(fecha>= ini_date & fecha <= end_date)
   df <- df %>%
     mutate(link = str_extract(texto, "https?://\\S+")) %>% # Extraer enlaces
     mutate(site = str_extract(link, "(?<=://)[^/]+")) %>% # Extraer dominios
@@ -709,7 +830,7 @@ draw_site_acumulate <- function(df, periodo, ini_date, end_date) {
   df <- bind_rows(df, new_rows) %>%
     group_by(site,fecha_slot) %>%
     summarise(
-      tweets_count = n()+ sum(reposteos)
+      tweets_count = ifelse(RTs == TRUE, n() + sum(reposteos), n()),
     ) %>%
     mutate(cumulative_sum = cumsum(tweets_count)) 
   top_sites <- df %>%
@@ -736,11 +857,7 @@ draw_site_acumulate <- function(df, periodo, ini_date, end_date) {
        filter (site %in% top_sites$site),
      aes(
        x = fecha_slot, y = cumulative_sum, color = site,
-       label = paste0(
-         site,
-         "(",
-         format(cumulative_sum, big.mark=".",decimal.mark=","),
-         " ref.)")
+       label = glue("{site} ({format(cumulative_sum, big.mark='.',decimal.mark=',')} ref.)")
      ), 
      ylim = c(0, limit_y*1.3),
      vjust = 1,
@@ -764,10 +881,10 @@ draw_site_acumulate <- function(df, periodo, ini_date, end_date) {
       expand= c(0,0)
     ) +
     labs(
-      title = paste0(params$base_title, ": Accumulated sites"),
-      subtitle = "(Adding retweet amplification)",
+      title = glue("{params$base_title}: Accumulated sites"),
+      subtitle = ifelse(RTs == TRUE,"(Adding retweet amplification)",""),
       x = "", 
-      y = paste0(" accumulated sites per ", slot_time),
+      y = glue("Accumulated sites per {slot_time}"),
       color=""
     ) +
     guides(color=guide_legend(ncol=2)) +
@@ -783,12 +900,10 @@ draw_site_acumulate <- function(df, periodo, ini_date, end_date) {
 # chart line
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-draw_topics_acumulate <- function(df, topics, periodo, ini_date, end_date, RTs) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
+draw_topics_acumulate <- function(df, topics,  ini_date, end_date, RTs) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   first_time <- TRUE
   df <- df %>%
     select(fecha_slot,texto,reposteos) %>%
@@ -854,11 +969,7 @@ draw_topics_acumulate <- function(df, topics, periodo, ini_date, end_date, RTs) 
         x = fecha_slot,
         y = cumulative_sum,
         color = topics,
-        label = paste0(
-       topics,
-        "(",
-        format(cumulative_sum, big.mark=".",decimal.mark=","),
-        " ref.)")
+        label = glue("{topics} ({format(cumulative_sum, big.mark='.',decimal.mark=',')} ref.)")
       ), 
       force = 10,
       ylim = c(0, limit_y*1.6),
@@ -884,10 +995,10 @@ draw_topics_acumulate <- function(df, topics, periodo, ini_date, end_date, RTs) 
     ) +
     scale_color_manual(values = topics_color) +
     labs(
-      title = paste0(params$base_title,": Accumulated topics"),
+      title = glue("{params$base_title}: Accumulated topics"),
       subtitle = ifelse(RTs == TRUE,"(Adding retweet amplification)",""),
       x = "",
-      y =  paste0(" accumulated topics per ", slot_time),
+      y =  glue("Accumulated topics per {slot_time}"),
       color = ""
     ) +
     my_theme()
@@ -902,13 +1013,10 @@ draw_topics_acumulate <- function(df, topics, periodo, ini_date, end_date, RTs) 
 # chart line
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
-draw_emojis_acumulate <- function(df, periodo, ini_date, end_date, RTs) {
-  # Si es zoom, acotamos el tiempo
-  if (periodo == "zoom"){
-    df <- df %>% 
-      filter(date >= ini_date & date <= end_date)
-  }
-  
+draw_emojis_acumulate <- function(df, ini_date, end_date, RTs) {
+
+  df <- df %>% 
+    filter(fecha >= ini_date & fecha <= end_date)
   frecuency_emoji <- df %>%
     filter(!is.na(emoticones)) %>%
     group_by(emoticones) %>%     # Agrupamos por emoticones 
@@ -981,11 +1089,7 @@ draw_emojis_acumulate <- function(df, periodo, ini_date, end_date, RTs) {
       aes(
         x = fecha_slot,
         y = cumulative_sum,
-        label = paste0(
-          emojis,
-          "(",
-          format(cumulative_sum, big.mark=".",decimal.mark=","),
-          " ref.)"),
+        label = glue("{emojis}({format(cumulative_sum, big.mark='.',decimal.mark=',')} ref.)"),
         color = emojis
       ), 
       family = "notoemoji",
@@ -1012,10 +1116,10 @@ draw_emojis_acumulate <- function(df, periodo, ini_date, end_date, RTs) {
       expand= c(0,0)
     ) +
     labs(
-      title = paste0(params$base_title,": Accumulated emojis"),
+      title = glue("{params$base_title}: Accumulated emojis"),
       subtitle = ifelse(RTs == TRUE,"(Adding retweet amplification)",""),
       x = "",
-      y =  paste0(" accumulated emojis per ", slot_time),
+      y =  glue(" Accumulated emojis per {slot_time}"),
       color = ""
     ) +
     my_theme()
