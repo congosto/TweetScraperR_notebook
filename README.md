@@ -47,7 +47,8 @@ En este cuaderno se han adaptado las librerías **TweetScraperR** a la forma de 
 3.  **Get Tweets Timeline**: descarga el timeline de un usuario, incluidos RTs. El formato de los datos es diferente a las opciones 1 y 2
 4.  **Get Tweets Replies**: descarga las respuestas de los tuits de un dataset. El formato de los datos es similar a las opciones 1 y 2, pero tiene dos columnas adicionales para identificar el origen de la respuesta.
 5.  **Get Tweets Cites**: descarga las citas de los tuits de un dataset. El formato de los datos es igual a las opciones 1 y 2
-6.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
+6.  **Get Retweets**: descarga los usuarios que han hecho RT a los tweets de un dataset. El formato de los datos es diferente a las opciones 1 y 2
+7.  **Get Tweets images**: obtiene las imágenes de una descarga ya realizada
 
 ### TweetScraperR_notebook_charts.Rmd
 
@@ -99,4 +100,4 @@ Genera un conjunto de gráficas para el análisis de usuarios descargados con el
 
 ### TweetScraperR_notebook_charts_graph.Rmd
 
-Gernera un grafo en formato **gdf** con los tuits descargados con el chunk **Get-Tweets-Replies** o **Get-Tweets-Cites** el cuaderno **TweetScraperR_notebook.Rmd**
+Genera un grafo de replies, quotes o RTs en formato **gdf** con los tuits descargados con el chunk **Get-Tweets-Replies** o **Get-Tweets-Cites** o **Get Retweets** del cuaderno **TweetScraperR_notebook.Rmd**
