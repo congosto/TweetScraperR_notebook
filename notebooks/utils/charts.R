@@ -19,7 +19,6 @@ draw_tweets_vs_reach_influencers <- function(df, ini_date, end_date, nin_reprodu
       .groups = 'drop'
     ) %>% 
     ungroup() 
-  print (df)
   # Buscamos los influencers de cada una de los slots de tiempo
   tweets_vs_influencer_df <- df %>% 
     group_by(fecha_slot, username ) %>%
@@ -82,7 +81,7 @@ draw_tweets_vs_reach_influencers <- function(df, ini_date, end_date, nin_reprodu
     scale_y_continuous(
       name = glue("Num. Original tweets per {slot_time}"), 
       labels = label_number(scale_cut = cut_si('')),
-      limits= c(0,limit_y*1.1 ),
+      limits= c(0,limit_y*1.3 ),
       expand= c(0,0),
       sec.axis = dup_axis(
         trans=(~ . * ajuste_escala), 
@@ -186,7 +185,7 @@ draw_tweets_vs_reach <- function(df, ini_date, end_date, events) {
       color = COLOR_TEXTO,
       force = 1,
       size = 3.5,
-      nudge_y =  max_tweets * 0.2,
+      nudge_y =  max_tweets * 0.25,
       segment.size = 0.5,
       segment.linetype = 2,
       min.segment.length = 0, 
@@ -203,7 +202,7 @@ draw_tweets_vs_reach <- function(df, ini_date, end_date, events) {
       color = COLOR_TEXTO,
       force = 1,
       size = 3.5,
-      nudge_y =  max_reach/ajuste_escala * 0.35,
+      nudge_y =  max_reach/ajuste_escala * 0.1,
       segment.size = 0.5,
       segment.linetype = 2,
       min.segment.length = 0, 
@@ -272,7 +271,7 @@ draw_tweets_vs_reach <- function(df, ini_date, end_date, events) {
       ) +
       geom_label (
         data = events,
-        aes (x = date, y = max_tweets * 1.2, label = event),
+        aes (x = date, y = max_tweets * 1.4, label = event),
         color = COLOR_TEXTO,
         size = 3.5,
         vjust = .5
