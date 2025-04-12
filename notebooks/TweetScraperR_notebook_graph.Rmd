@@ -8,7 +8,7 @@ params:
     data_path: "../data"                # Path raiz de los datos
     dataset_name: "trump"               # Nombre del dataset
     prefix: "trump"                     # Prefijo para ficheros de gráficas
-    relation: "reply"                     # Relación (reply | quote | all) 
+    relation: "RT"                     # Relación (reply | quote | RT) 
     zoom: FALSE                         # Grafo acotado en fechas
     min_date_zoom: "2025-02-20 00:30:00"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
     max_date_zoom: "2025-02-22 01:01:01"  # (Solo si zoom es TRUE) Fecha de inicio del zoom, formato YYYY-MM-DD 
@@ -16,7 +16,7 @@ params:
 
 ## TweetScraperR_notebook_graph.Rmd
 
-Genera un fichero gdf para que sirva de entrada a Gephi de un dataset descargado con *TweetScraperR_notebook.Rmd**. Las relaciones pueden ser respuestas (reply) o citas (quote) o ambas (all) . 
+Genera un fichero gdf para que sirva de entrada a Gephi de un dataset descargado con *TweetScraperR_notebook.Rmd**. Las relaciones pueden ser respuestas (reply) o citas (quote) o retuits (RT) . 
 
 El formato gdf es texto plano, compuesto de dos zonas:
 
@@ -56,12 +56,14 @@ library("glue")
 ```{r environment}
 ## Entorno por defecto. No tocar salvo que se quiera usar otro entorno
 data_path <- file.path(params$data_path, params$dataset_name) # Directorio de datos
+
 tweets_replies_file <- file.path(data_path, glue("{params$prefix}_meta_replies.csv")) # tweets respuestas
 tweets_cites_file <- file.path(data_path, glue("{params$prefix}_meta_cites.csv")) # tweets citas
+tweets_RTs_file <- file.path(data_path, glue("{params$prefix}_RTs.csv")) # tweets retuits
 if (params$zoom){
-  tweets_gdf_file <- file.path(data_path, glue("{params$prefix}_{params$relation}_zoom.gdf")) # fichero gdf
+  gdf_file <- file.path(data_path, glue("{params$prefix}_{params$relation}_zoom.gdf")) # fichero gdf
 }else{
-  tweets_gdf_file <- file.path(data_path, glue("{params$prefix}_{params$relation}.gdf")) # fichero gdf
+  gdf_file <- file.path(data_path, glue("{params$prefix}_{params$relation}.gdf")) # fichero gdf
 }
 ```
 
@@ -90,45 +92,37 @@ if(params$relation == "quote"){
     tweets_cites_file,
     show_col_types = FALSE
   ) %>%
-  # Normalizar a origin-target
-  rename(
-    origin = username,
-    target = user_citado
-  ) %>%
-  select (fecha, origin, target)
-}
-if(params$relation == "all"){
-  # Leer fichero replies
-  tweets_r <- read_csv(
-    tweets_replies_file,
-    show_col_types = FALSE
-  ) %>%
   filter( username != "https://x.comNA") %>%
   # Normalizar a origin-target
   rename(
     origin = username,
-    target = respuesta_a_user
-  ) %>%
-  select (fecha, origin, target)
-  # Leer fichero cites
-  tweets_c <- read_csv(
-    tweets_cites_file,
-    show_col_types = FALSE
-  ) %>%
-  # Normalizar a origin-target
-  rename(
-    origin = username,
     target = user_citado
   ) %>%
   select (fecha, origin, target)
-  # Unir
-  tweets <-  rbind(tweets_r, tweets_c)
+}
+if(params$relation == "RT"){
+  # Leer fichero replies
+  tweets <- read_csv(
+    tweets_RTs_file,
+    show_col_types = FALSE
+  ) %>%
+  filter(!is.na(user)) %>%
+  # Normalizar a origin-target
+  rename(
+    origin = user,
+    target = user_retweeted
+  ) %>%
+  select (origin, target)
 }
 # Filtrar si hay zoom
-if (params$zoom){
+if (params$zoom & params$relation != "RT"){
   tweets <- tweets %>%
     filter (fecha >=  params$min_date_zoom & date <=  params$max_date_zoom)
 }
+# Filtrar valores nulos
+tweets <- tweets %>%
+  filter(!is.na(origin)) %>%
+  filter(!is.na(target)) 
 
 ```
 
@@ -142,7 +136,6 @@ top_in<- tweets %>%
     .groups = "drop"
   ) %>%
   ungroup() %>%
-  filter(!is.na(target) ) %>%
   arrange(desc(n_in))
 ```
 
@@ -157,7 +150,6 @@ top_out<- tweets %>%
     .groups = "drop"
   ) %>%
   ungroup() %>%
-  filter(!is.na(origin) ) %>%
   arrange(desc(n_out))
 ```
 
@@ -170,7 +162,7 @@ nodes_origin  <- tweets %>%
   group_by(origin) %>% 
   slice(1) %>%
   ungroup() %>%
-  rename (node =origin)
+  rename (node = origin)
 nodes_target  <- tweets %>%
   #dejar solo un tweet por usuario 
   group_by(target) %>% 
@@ -200,7 +192,6 @@ nodes <- bind_rows(nodes_origin, nodes_target) %>%
 tweets$origin <- factor(tweets$origin,levels=nodes$node) # Ordenamos según nodos
 arcs  <- tweets %>%
   # Dejamos solo las relaciones
-  filter(!is.na(target))  %>%
   # añadimos el tipo de relación
   mutate(directed = "TRUE") %>%
   # Agrupamos para contar el número de relaciones de cada usuario
@@ -219,9 +210,9 @@ arcs  <- tweets %>%
 head_nodes <- "nodedef>name VARCHAR,n_in INT, n_out INT, n_tot INT"
 head_arcs <- "edgedef>origin VARCHAR,target VARCHAR, directed BOOLEAN, weight INT"  
 # escribimos el fichero gdf
-write(head_nodes, tweets_gdf_file)
-write_csv(nodes, tweets_gdf_file, append = TRUE, col_names = FALSE)
-write(head_arcs, tweets_gdf_file, append = TRUE,)
-write_csv(arcs, tweets_gdf_file, append = TRUE, col_names = FALSE)
+write(head_nodes, gdf_file)
+write_csv(nodes, gdf_file, append = TRUE, col_names = FALSE)
+write(head_arcs, gdf_file, append = TRUE,)
+write_csv(arcs, gdf_file, append = TRUE, col_names = FALSE)
 ```
 
